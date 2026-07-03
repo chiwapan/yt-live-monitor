@@ -197,12 +197,15 @@ def update_stream_state(state, live_streams, cron_now):
 # ─── Daily Summary ───
 
 def generate_daily_summary(state, cron_now):
-    """Generate daily summary rows for ended streams (once per day)."""
+    """Generate daily summary rows + peak summary for ended streams (once per day).
+    Returns (summary_rows, peak_rows).
+    """
     today = cron_now.strftime("%Y-%m-%d")
     if state["last_daily_summary"] == today:
-        return []
+        return [], []
 
     rows = []
+    peak_rows = []
     for vid, s in state["streams"].items():
         if not s.get("ended"):
             continue
@@ -219,6 +222,7 @@ def generate_daily_summary(state, cron_now):
         samples = s.get("samples", [])
         avg_viewers = sum(samples) / max(len(samples), 1)
 
+        # Daily_Summary tab: tech format with video ID + duration
         rows.append([
             today,
             vid,
@@ -231,7 +235,19 @@ def generate_daily_summary(state, cron_now):
             s.get("url", ""),
         ])
 
-    return rows
+        # Peak_Viewers tab: clean summary — no video ID, easier to read
+        peak_rows.append([
+            today,
+            s.get("title", "")[:80],
+            s.get("channel", ""),
+            s["peak_viewers"],
+            int(avg_viewers),
+            s.get("actual_start", "")[:19],
+            s.get("end_time", ""),
+            s.get("url", ""),
+        ])
+
+    return rows, peak_rows
 
 
 # ─── Google Sheets ───
@@ -242,13 +258,13 @@ def sheets_append(tab_name, rows):
         return
 
     values_json = json.dumps(rows)
-    col = "F" if tab_name == "Raw" else "I"
+    col = "F" if tab_name == "Raw" else ("H" if tab_name == "Peak_Viewers" else "I")
     range_str = f"{tab_name}!A:{col}"
 
     cmd = [sys.executable, GAPI_SCRIPT, "sheets", "append",
            SHEET_ID, range_str, "--values", values_json]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
             print(f"⚠️ Sheets append failed: {result.stderr.strip()}")
         else:
@@ -263,7 +279,7 @@ def sheets_update(tab_name, range_str, values):
     cmd = [sys.executable, GAPI_SCRIPT, "sheets", "update",
            SHEET_ID, f"{tab_name}!{range_str}", "--values", values_json]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
             print(f"⚠️ Sheets update failed: {result.stderr.strip()}")
         else:
@@ -275,10 +291,13 @@ def sheets_update(tab_name, range_str, values):
 def setup_sheet_tabs():
     """Ensure tabs exist with headers."""
     sheets_update("Raw", "A1:F1",
-                  [[["Timestamp", "Video_ID", "Title", "Concurrent_Viewers", "Channel", "URL"]]])
+                  [["Timestamp", "Video_ID", "Title", "Concurrent_Viewers", "Channel", "URL"]])
     sheets_update("Daily_Summary", "A1:I1",
-                  [[["Date", "Video_ID", "Title", "Peak_Viewers", "Avg_Viewers",
-                     "Start_Time", "End_Time", "Duration_Min", "URL"]]])
+                  [["Date", "Video_ID", "Title", "Peak_Viewers", "Avg_Viewers",
+                     "Start_Time", "End_Time", "Duration_Min", "URL"]])
+    sheets_update("Peak_Viewers", "A1:H1",
+                  [["Date", "Program", "Channel", "Peak_Viewers", "Avg_Viewers",
+                     "Start_Time", "End_Time", "URL"]])
 
 
 # ─── Main ───
@@ -305,9 +324,11 @@ def main():
         print("ℹ️ No live streams right now — silent exit")
         state = load_state()
         update_stream_state(state, [], now)
-        summary_rows = generate_daily_summary(state, now)
+        summary_rows, peak_rows = generate_daily_summary(state, now)
         if summary_rows:
+            setup_sheet_tabs()
             sheets_append("Daily_Summary", summary_rows)
+            sheets_append("Peak_Viewers", peak_rows)
             state["streams"] = {vid: s for vid, s in state["streams"].items()
                                 if not s.get("ended")}
             state["last_daily_summary"] = now.strftime("%Y-%m-%d")
@@ -337,9 +358,12 @@ def main():
     sheets_append("Raw", raw_rows)
 
     # 5. Daily summary if streams ended
-    summary_rows = generate_daily_summary(state, now)
+    summary_rows, peak_rows = generate_daily_summary(state, now)
     if summary_rows:
+        # Ensure Peak_Viewers tab exists (headers written once)
+        setup_sheet_tabs()
         sheets_append("Daily_Summary", summary_rows)
+        sheets_append("Peak_Viewers", peak_rows)
         state["streams"] = {vid: s for vid, s in state["streams"].items()
                             if not s.get("ended")}
         state["last_daily_summary"] = now.strftime("%Y-%m-%d")
