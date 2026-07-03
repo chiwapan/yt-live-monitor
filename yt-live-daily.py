@@ -113,6 +113,9 @@ def check_if_live(video_ids_list):
         "id": ids_str,
     })
 
+    # Load state to get last known viewers for fallback
+    state = load_state()
+
     live_streams = []
     for item in result.get("items", []):
         live_details = item.get("liveStreamingDetails", {})
@@ -120,6 +123,16 @@ def check_if_live(video_ids_list):
         vid = item["id"]
 
         concurrent = live_details.get("concurrentViewers")
+        actual_end = live_details.get("actualEndTime")
+
+        # If concurrentViewers is missing but stream is still live (no endTime),
+        # use last known viewers from state as fallback
+        if concurrent is None and actual_end is None and vid in state.get("streams", {}):
+            last_viewers = state["streams"][vid].get("last_viewers")
+            if last_viewers is not None:
+                concurrent = last_viewers
+                print(f"⚠️ {vid}: concurrentViewers missing, using fallback {last_viewers}")
+
         if concurrent is not None:
             ch_info = channel_lookup.get(vid, {"channel_name": "Unknown", "channel_id": ""})
             live_streams.append({
