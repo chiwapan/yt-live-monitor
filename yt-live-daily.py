@@ -236,13 +236,14 @@ def generate_daily_summary(state, cron_now):
         ])
 
         # Peak_Viewers tab: clean summary — no video ID, easier to read
+        # Use first_seen (when we detected viewers) instead of actual_start (YouTube stream start time)
         peak_rows.append([
             today,
             s.get("title", "")[:80],
             s.get("channel", ""),
             s["peak_viewers"],
             int(avg_viewers),
-            s.get("actual_start", "")[:19],
+            s.get("first_seen", "")[:19],
             s.get("end_time", ""),
             s.get("url", ""),
         ])
