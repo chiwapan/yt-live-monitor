@@ -288,6 +288,50 @@ def sheets_update(tab_name, range_str, values):
         print(f"⚠️ Sheets update error: {e}")
 
 
+def sheets_sort_by_start_time(tab_name, time_col_index=5):
+    """Sort tab by Start_Time column (parse datetime, not string sort)."""
+    range_str = f"{tab_name}!A:H"
+    cmd = [sys.executable, GAPI_SCRIPT, "sheets", "get", SHEET_ID, range_str]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            print(f"⚠️ Sheets get failed: {result.stderr.strip()}")
+            return
+        
+        rows = json.loads(result.stdout)
+        if len(rows) <= 1:
+            return
+        
+        header = rows[0]
+        data = rows[1:]
+        
+        # Parse Start_Time for sorting
+        def parse_start(row):
+            if len(row) <= time_col_index:
+                return datetime.min
+            ts = row[time_col_index].strip()
+            for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M']:
+                try:
+                    return datetime.strptime(ts, fmt)
+                except:
+                    pass
+            return datetime.min
+        
+        data.sort(key=parse_start)
+        sorted_rows = [header] + data
+        
+        values_json = json.dumps(sorted_rows, ensure_ascii=False)
+        cmd2 = [sys.executable, GAPI_SCRIPT, "sheets", "update",
+                SHEET_ID, f"{tab_name}!A:H", "--values", values_json]
+        result2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=30)
+        if result2.returncode != 0:
+            print(f"⚠️ Sort update failed: {result2.stderr.strip()}")
+        else:
+            print(f"✅ Sorted {tab_name} by Start_Time")
+    except Exception as e:
+        print(f"⚠️ Sort error: {e}")
+
+
 def setup_sheet_tabs():
     """Ensure tabs exist with headers."""
     sheets_update("Raw", "A1:F1",
@@ -329,6 +373,8 @@ def main():
             setup_sheet_tabs()
             sheets_append("Daily_Summary", summary_rows)
             sheets_append("Peak_Viewers", peak_rows)
+            sheets_sort_by_start_time("Peak_Viewers")
+            sheets_sort_by_start_time("Daily_Summary")
             state["streams"] = {vid: s for vid, s in state["streams"].items()
                                 if not s.get("ended")}
             state["last_daily_summary"] = now.strftime("%Y-%m-%d")
@@ -364,6 +410,8 @@ def main():
         setup_sheet_tabs()
         sheets_append("Daily_Summary", summary_rows)
         sheets_append("Peak_Viewers", peak_rows)
+        sheets_sort_by_start_time("Peak_Viewers")
+        sheets_sort_by_start_time("Daily_Summary")
         state["streams"] = {vid: s for vid, s in state["streams"].items()
                             if not s.get("ended")}
         state["last_daily_summary"] = now.strftime("%Y-%m-%d")
