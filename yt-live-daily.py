@@ -37,6 +37,8 @@ GAPI_SCRIPT = os.environ.get("GAPI_SCRIPT",
 CHANNELS = [
     {"id": "UCrFDdD-EE05N7gjwZho2wqw", "name": "ThaiRath News"},
     {"id": "UCtc9-CS_FIZ7GGrm8--wsrQ", "name": "ThaiRath Variety"},
+    {"id": "UC6x41swVZP3rEmy-ODxLMFA", "name": "ข่าวช่อง8"},
+    {"id": "UCzMoibQRslh_1bTuW0YXc6A", "name": "Amarin TV"},
 ]
 
 ICT = timezone(timedelta(hours=7))
@@ -106,18 +108,23 @@ def check_if_live(video_ids_list):
         return []
 
     channel_lookup = {v["video_id"]: v for v in video_ids_list}
-    ids_str = ",".join(v["video_id"] for v in video_ids_list)
 
-    result = yt_api("videos", {
-        "part": "snippet,liveStreamingDetails",
-        "id": ids_str,
-    })
+    # Batch: YouTube API max 50 IDs per call
+    all_items = []
+    for i in range(0, len(video_ids_list), 50):
+        batch = video_ids_list[i:i+50]
+        ids_str = ",".join(v["video_id"] for v in batch)
+        result = yt_api("videos", {
+            "part": "snippet,liveStreamingDetails",
+            "id": ids_str,
+        })
+        all_items.extend(result.get("items", []))
 
     # Load state to get last known viewers for fallback
     state = load_state()
 
     live_streams = []
-    for item in result.get("items", []):
+    for item in all_items:
         live_details = item.get("liveStreamingDetails", {})
         snippet = item.get("snippet", {})
         vid = item["id"]
