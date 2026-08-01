@@ -403,6 +403,23 @@ def main():
     rss_videos = get_live_from_rss()
     print(f"📡 RSS: found {len(rss_videos)} recent videos")
 
+    # 1b. รวม stream จาก state ที่ยังไม่ ended (กันหลุดจาก RSS — RSS คืนแค่ ~15 ตัว)
+    state_pre = load_state()
+    rss_ids = {v["video_id"] for v in rss_videos}
+    ch_lookup = {c["id"]: c["name"] for c in CHANNELS}
+    for vid, s in state_pre.get("streams", {}).items():
+        if vid in rss_ids or s.get("ended"):
+            continue
+        # หา channel_id จาก name
+        ch_id = next((c["id"] for c in CHANNELS if c["name"] == s.get("channel")), "")
+        rss_videos.append({
+            "video_id": vid,
+            "title": s.get("title", ""),
+            "channel_id": ch_id,
+            "channel_name": s.get("channel", "Unknown"),
+        })
+        print(f"📌 state-persist: {vid} ({s.get('title','')[:40]}) — not in RSS, still polling")
+
     # 2. Check which are live
     live_streams = check_if_live(rss_videos)
 
