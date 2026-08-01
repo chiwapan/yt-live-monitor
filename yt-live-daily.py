@@ -365,6 +365,27 @@ def setup_sheet_tabs():
                      "Start_Time", "End_Time", "URL"]])
 
 
+# ─── Local JSONL store (for dashboard) ───
+JSONL_FILE = "/opt/data/projects/yt-live-monitor/live_data.jsonl"
+
+def append_local_jsonl(live_streams, now):
+    """Append live samples to local JSONL — dashboard reads this directly."""
+    try:
+        with open(JSONL_FILE, "a") as f:
+            for s in live_streams:
+                f.write(json.dumps({
+                    "ts": now.strftime("%Y-%m-%d %H:%M:%S"),
+                    "video_id": s["video_id"],
+                    "title": s["title"][:100],
+                    "viewers": s["concurrent_viewers"],
+                    "channel": s["channel_name"],
+                    "url": s["url"],
+                    "actual_start": s.get("actual_start", ""),
+                }, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"⚠️ JSONL write error: {e}")
+
+
 # ─── Main ───
 
 def main():
@@ -423,6 +444,9 @@ def main():
             s["url"],
         ])
     sheets_append("Raw", raw_rows)
+
+    # 4b. Append to local JSONL for dashboard (fast, no API needed)
+    append_local_jsonl(live_streams, now)
 
     # 5. Daily summary if streams ended
     summary_rows, peak_rows = generate_daily_summary(state, now)
