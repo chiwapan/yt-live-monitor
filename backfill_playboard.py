@@ -85,7 +85,8 @@ def date_from_title(title):
     m = re.search(r'(\d{2})-(\d{2})-(\d{2})', title)
     if m:
         dd, mo, yy = m.groups()
-        return f"20{yy}-{mo}-{dd}"
+        # พ.ศ. 2 หลัก (เช่น 69 = 2569) → ค.ศ. = พ.ศ. - 543
+        return f"{2500 + int(yy) - 543:04d}-{mo}-{dd}"
     return None
 
 def load_existing():
