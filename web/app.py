@@ -32,6 +32,114 @@ def api_ping():
     return jsonify({"status": "ok", "ts": datetime.now(timezone.utc).isoformat()})
 
 
+# ── Slot comparison: ข่าวเช้า / เที่ยง / เย็น / Primetime วันต่อวัน ──
+SLOTS = [
+    {"name": "ข่าวเช้า", "programs": [
+        {"name": "ข่าวเช้าหัวเขียว", "channel": "ThaiRath News", "kw": ["ข่าวเช้าหัวเขียว"]},
+        {"name": "คุยข่าวเช้าช่อง8", "channel": "ข่าวช่อง8", "kw": ["คุยข่าวเช้า"]},
+        {"name": "ตะลอนข่าว", "channel": "ThaiRath Variety", "kw": ["ตะลอนข่าว"]},
+    ]},
+    {"name": "ข่าวเที่ยง", "programs": [
+        {"name": "ข่าวเที่ยงไทยรัฐ", "channel": "ThaiRath News", "kw": ["ข่าวเที่ยงไทยรัฐ"]},
+        {"name": "ข่าวใหญ่ช่อง8", "channel": "ข่าวช่อง8", "kw": ["ข่าวใหญ่ช่อง8"]},
+    ]},
+    {"name": "ข่าวเย็น (16:00)", "programs": [
+        {"name": "ข่าวเย็นไทยรัฐ", "channel": "ThaiRath News", "kw": ["ข่าวเย็นไทยรัฐ"]},
+        {"name": "คุยข่าวเย็นช่อง8", "channel": "ข่าวช่อง8", "kw": ["คุยข่าวเย็น"]},
+    ]},
+    {"name": "ข่าวค่ำ (Primetime 19:00)", "programs": [
+        {"name": "ไทยรัฐนิวส์โชว์", "channel": "ThaiRath News", "kw": ["ไทยรัฐนิวส์โชว์"]},
+        {"name": "ลุยชนข่าว", "channel": "ข่าวช่อง8", "kw": ["ลุยชนข่าว"]},
+        {"name": "ทุบโต๊ะข่าว", "channel": "Amarin TV", "kw": ["ทุบโต๊ะข่าว"]},
+    ]},
+]
+
+
+@app.route("/api/slot-compare")
+def api_slot_compare():
+    """Peak viewers per program per day — วันต่อวัน สำหรับเทียบข่าวแต่ละช่วงเวลา"""
+    def parse_ts(ts):
+        if not ts:
+            return None
+        try:
+            return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            try:
+                date_part, time_part = ts.split(" ", 1)
+                y, m, d = date_part.split("-")
+                hh, mm, ss = time_part.split(":")
+                return datetime(int(y), int(m), int(d), int(hh), int(mm), int(ss))
+            except Exception:
+                return None
+
+    # stream key (ch, vid) → {title, channel, date, peak}
+    streams = {}
+    try:
+        with open(LIVE_JSONL) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except Exception:
+                    continue
+                dt = parse_ts(d.get("ts", ""))
+                if not dt:
+                    continue
+                key = (d.get("channel", "Unknown"), d.get("video_id", ""))
+                s = streams.get(key)
+                if s is None:
+                    s = streams[key] = {
+                        "title": d.get("title", ""),
+                        "channel": key[0],
+                        "date": dt.strftime("%Y-%m-%d"),
+                        "peak": 0,
+                        "start": dt,
+                        "end": dt,
+                    }
+                if d.get("viewers", 0) > s["peak"]:
+                    s["peak"] = d["viewers"]
+                if dt < s["start"]:
+                    s["start"] = dt
+                if dt > s["end"]:
+                    s["end"] = dt
+    except FileNotFoundError:
+        return jsonify({"slots": [], "last_ts": ""})
+
+    result = []
+    for slot in SLOTS:
+        progs = []
+        for prog in slot["programs"]:
+            days = {}
+            for s in streams.values():
+                if s["channel"] != prog["channel"]:
+                    continue
+                if not any(k in s["title"] for k in prog["kw"]):
+                    continue
+                e = days.get(s["date"])
+                if e is None:
+                    days[s["date"]] = {
+                        "peak": s["peak"],
+                        "start": s["start"].strftime("%H:%M"),
+                        "end": s["end"].strftime("%H:%M"),
+                    }
+                else:
+                    e["peak"] = max(e["peak"], s["peak"])
+                    if s["start"].strftime("%H:%M") < e["start"]:
+                        e["start"] = s["start"].strftime("%H:%M")
+                    if s["end"].strftime("%H:%M") > e["end"]:
+                        e["end"] = s["end"].strftime("%H:%M")
+            progs.append({
+                "name": prog["name"],
+                "channel": prog["channel"],
+                "days": days,
+            })
+        result.append({"name": slot["name"], "programs": progs})
+
+    return jsonify({"slots": result})
+
+
 @app.route("/api/live-data")
 def api_live_data():
     """Read JSONL, group by channel → stream, return for Chart.js.

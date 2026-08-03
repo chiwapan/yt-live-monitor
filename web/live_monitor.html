@@ -228,7 +228,8 @@ const CH_COLORS = {
 const CH_ORDER = ['ThaiRath News','ThaiRath Variety','ข่าวช่อง8','Amarin TV'];
 
 let DATA = null;
-let VIEW = 'overview';      // 'overview' | channel name
+let SLOTCMP = null;        // /api/slot-compare data (compare view)
+let VIEW = 'overview';      // 'overview' | 'compare' | channel name
 let DATE = null;            // null = ยังไม่เลือก (ใช้วันที่ล่าสุด), '' = ทั้งหมด, 'YYYY-MM-DD' = วันนั้น
 let charts = [];
 
@@ -268,13 +269,19 @@ function renderTabs(){
   const el = document.getElementById('tabs');
   const chs = Object.keys(DATA.channels).sort((a,b)=>CH_ORDER.indexOf(a)-CH_ORDER.indexOf(b));
   let h = `<button class="${VIEW==='overview'?'active':''}" onclick="go('overview')">ภาพรวม</button>`;
+  h += `<button class="${VIEW==='compare'?'active':''}" onclick="go('compare')">เปรียบเทียบข่าว เช้า/เที่ยง/ค่ำ</button>`;
   for(const ch of chs){
     const n = DATA.channels[ch].streams.length;
     h += `<button class="${VIEW===ch?'active':''}" onclick="go('${ch.replace(/'/g,"\\'")}')">${ch}<span class="cnt num">${n}</span></button>`;
   }
   el.innerHTML = h;
 }
-function go(view){ VIEW=view; render(); window.scrollTo({top:0,behavior:'smooth'}); }
+function go(view){
+  const switching = (view==='compare') !== (VIEW==='compare');
+  VIEW=view;
+  if(switching) load(); else render();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
 function onDateChange(){ DATE = document.getElementById('dateSel').value || ''; load(); }
 
 /* ── Overview ── */
@@ -496,6 +503,109 @@ function renderChannel(ch){
   });
 }
 
+/* ── Slot comparison (เช้า/เที่ยง/เย็น/Primetime วันต่อวัน) ── */
+function slotDateLabel(d){
+  const dt = new Date(d+'T00:00:00+07:00');
+  return dt.toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short',timeZone:'Asia/Bangkok'});
+}
+function diffHtml(cur, prev){
+  if(prev==null || prev===0 || cur==null) return '<span style="color:var(--muted)">-</span>';
+  const pct = (cur-prev)/prev*100;
+  const cls = pct>=0 ? 'color:var(--green)' : 'color:var(--red)';
+  return `<span style="${cls};font-weight:600">${pct>=0?'+':''}${pct.toFixed(0)}%</span>`;
+}
+async function renderCompare(){
+  if(!SLOTCMP){
+    try{
+      const r = await fetch('/api/slot-compare');
+      SLOTCMP = await r.json();
+    }catch(e){
+      document.getElementById('content').innerHTML = '<div class="empty" style="color:var(--red)">โหลดข้อมูลเปรียบเทียบไม่สำเร็จ</div>';
+      return;
+    }
+  }
+  const slots = SLOTCMP.slots||[];
+  let h = `<div class="sechead" style="margin-top:0">เปรียบเทียบข่าวรายช่วงเวลา — Peak Viewers วันต่อวัน</div>`;
+  if(!slots.length){
+    h += '<div class="empty">ยังไม่มีข้อมูล</div>';
+    document.getElementById('content').innerHTML = h;
+    return;
+  }
+  h += `<div style="display:grid;gap:24px">`;
+  slots.forEach((slot,si)=>{
+    // รวมทุกวันที่ใน slot นี้ (ล่าสุดก่อน)
+    const allDates = new Set();
+    slot.programs.forEach(p=>Object.keys(p.days).forEach(d=>allDates.add(d)));
+    const dates = [...allDates].sort().reverse();
+    h += `<div class="panel">
+      <div class="panel-head"><h2>${slot.name}</h2><span class="hint">ตาราง = Peak viewers · Δ% เทียบวันก่อนหน้า · เวลาด้านล่าง = ออกอากาศ</span></div>
+      <div class="chartbox fullpage"><canvas id="slotChart${si}"></canvas></div>
+      <div class="tablepanel" style="margin-top:16px;overflow-x:auto">
+      <table><thead><tr><th>วันที่</th>`;
+    slot.programs.forEach(p=>{
+      h += `<th style="text-align:right"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${chColor(p.channel)};display:inline-block"></span>${p.name}<span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(${p.channel})</span></span></th>`;
+    });
+    h += `</tr></thead><tbody>`;
+    dates.forEach(date=>{
+      h += `<tr><td class="num" style="white-space:nowrap;font-weight:600">${slotDateLabel(date)}</td>`;
+      slot.programs.forEach(p=>{
+        const e = p.days[date];
+        const prev = p.days[prevDateOf(dates,date)];
+        if(!e){
+          h += `<td class="num" style="text-align:right;color:var(--muted)">—</td>`;
+        }else{
+          h += `<td class="num" style="text-align:right">
+            <span class="peakcell">${fmt(e.peak)}</span>
+            <span style="font-size:11.5px;margin-left:6px">${diffHtml(e.peak, prev?prev.peak:null)}</span>
+            <div style="font-size:11px;color:var(--muted)">${e.start}–${e.end}</div>
+          </td>`;
+        }
+      });
+      h += `</tr>`;
+    });
+    h += `</tbody></table></div></div>`;
+  });
+  h += `</div>`;
+  document.getElementById('content').innerHTML = h;
+
+  // Charts
+  slots.forEach((slot,si)=>{
+    const allDates = new Set();
+    slot.programs.forEach(p=>Object.keys(p.days).forEach(d=>allDates.add(d)));
+    const dates = [...allDates].sort();
+    charts.push(new Chart(document.getElementById('slotChart'+si),{
+      type:'line',
+      data:{
+        labels: dates.map(slotDateLabel),
+        datasets: slot.programs.map(p=>({
+          label: p.name,
+          data: dates.map(d=>p.days[d]?p.days[d].peak:null),
+          borderColor: chColor(p.channel),
+          backgroundColor: chColor(p.channel),
+          borderWidth:2.5, tension:.3, spanGaps:true,
+          pointRadius:3, pointHoverRadius:5,
+        }))
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        plugins:{
+          legend:{position:'bottom',labels:{usePointStyle:true,pointStyle:'circle',font:{family:'Noto Sans Thai',size:12}}},
+          tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.parsed.y)} คน`}}
+        },
+        scales:{
+          x:{ticks:{maxTicksLimit:14}},
+          y:{beginAtZero:true,ticks:{callback:v=>fmt(v)},grid:{color:'#eef0f3'}}
+        }
+      }
+    }));
+  });
+}
+function prevDateOf(sortedDescDates, date){
+  const i = sortedDescDates.indexOf(date);
+  return sortedDescDates[i+1];  // sortedDescDates เรียงล่าสุดก่อน → index+1 = วันก่อนหน้า
+}
+
 /* ── Render / load ── */
 function render(){
   destroyCharts();
@@ -505,8 +615,10 @@ function render(){
     document.getElementById('content').innerHTML = '<div class="empty">ยังไม่มีข้อมูลในวันที่เลือก</div>';
     return;
   }
-  if(VIEW==='overview' || !DATA.channels[VIEW]) renderOverview();
-  else renderChannel(VIEW);
+  if(VIEW==='overview') renderOverview();
+  else if(VIEW==='compare') renderCompare();
+  else if(DATA.channels[VIEW]) renderChannel(VIEW);
+  else renderOverview();
 }
 
 async function load(){
@@ -517,6 +629,7 @@ async function load(){
       const d0 = await r0.json();
       DATE = (d0.dates||[])[0] || '';
     }
+    if(VIEW==='compare') SLOTCMP = null;  // refresh ข้อมูลเปรียบเทียบทุกรอบ
     const url = '/api/live-data' + (DATE?('?date='+DATE):'');
     const r = await fetch(url);
     DATA = await r.json();
