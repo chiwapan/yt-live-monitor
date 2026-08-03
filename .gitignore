@@ -1,3 +1,4 @@
 token_sheets.json
 live_data.jsonl
 .env
+__pycache__/
