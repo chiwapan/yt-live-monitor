@@ -187,6 +187,71 @@ def filter_prelive(path=DATA):
               f"({', '.join(f'{v}+{d}' for v, d in drop_lead.items())})")
     return removed
 
+def auto_segment_titles(path=DATA):
+    """Auto-add '(ช่วงที่ N)' to same-name program lives.
+
+    TV news shows (ทุบโต๊ะข่าว ฯลฯ) often live in 2+ segments on the same
+    date, but the uploader sometimes forgets the '(ช่วงที่ N)' in the title.
+    If the same channel has 2+ videos on the same date whose titles match
+    when the '(ช่วงที่ N)'-suffix and '(🔴 LIVE )'/'[🔴LIVE]' prefixes are
+    stripped, and they aren't labelled yet, append '(ช่วงที่ N)' by time order.
+    Returns number of titles fixed.
+    """
+    if not os.path.exists(path):
+        return 0
+    rows = [json.loads(l) for l in open(path)]
+    # normalize: strip live-prefix, strip existing (ช่วงที่ N) suffix, strip date
+    import re
+    def norm(t):
+        t = re.sub(r'^\[?🔴?\s*LIVE\s*\]?\s*', '', t or '').strip()
+        t = re.sub(r'\s*\(ช่วงที่\s*\d+\)\s*$', '', t).strip()
+        return t
+    # group: (channel, date, normalized-title) -> video_ids
+    from collections import defaultdict
+    groups = defaultdict(set)
+    by_vid = defaultdict(list)
+    for r in rows:
+        by_vid[r["video_id"]].append(r)
+    for vid, rs in by_vid.items():
+        r = rs[0]
+        base = norm(r["title"])
+        if not base:
+            continue
+        d = r["ts"][:10]
+        ch = r.get("channel", "")
+        groups[(ch, d, base)].add(vid)
+
+    fix_title = {}
+    for (ch, d, base), vids in groups.items():
+        if len(vids) < 2:
+            continue
+        # which are already labelled -> count to continue numbering
+        labelled = [v for v in vids if "(ช่วงที่" in by_vid[v][0]["title"]]
+        next_seg = len(labelled)  # 0 if none labelled
+        # order remaining (unlabelled) by earliest timestamp (parse datetime —
+        # raw ts strings have non-padded hours like "8:35" that break string sort)
+        from datetime import datetime
+        unlabelled = [v for v in vids if "(ช่วงที่" not in by_vid[v][0]["title"]]
+        unlabelled.sort(key=lambda v: min(datetime.strptime(r["ts"], "%Y-%m-%d %H:%M:%S") for r in by_vid[v]))
+        for v in unlabelled:
+            next_seg += 1
+            fix_title[v] = next_seg
+
+    if not fix_title:
+        return 0
+    changed = 0
+    for r in rows:
+        if r["video_id"] in fix_title and "(ช่วงที่" not in r["title"]:
+            r["title"] = f"{norm(r['title'].rstrip())} (ช่วงที่ {fix_title[r['video_id']]})"
+            changed += 1
+    if changed:
+        with open(path, "w") as f:
+            for r in rows:
+                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        print(f"🔢 auto_segment: added '(ช่วงที่ N)' to {changed} rows "
+              f"({', '.join(f'{v}=#{n}' for v, n in fix_title.items())})")
+    return changed
+
 def main():
     args = sys.argv[1:]
     fallback = None
@@ -217,6 +282,7 @@ def main():
     print(f"\nรวม: +{total} rows")
     if do_filter:
         filter_prelive()
+    auto_segment_titles()
 
 if __name__ == "__main__":
     main()
