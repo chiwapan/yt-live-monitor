@@ -43,6 +43,7 @@ CHANNELS = [
     {"id": "UC5wKpLWxAZBZrunls3mzwEw", "name": "เรื่องเล่าเช้านี้"},
     {"id": "UCirZPTc9IoKM_DsA9aKbc4g", "name": "ครอบครัวข่าว3"},
     {"id": "UC4kPIfdCZrPqoQ94m6-eFsg", "name": "สรยุทธ กรรมกรข่าว"},
+    {"id": "UC3WyfUir0HD8sFI4AVAl6SQ", "name": "ข่าวเวิร์คพอยท์ 23"},
 ]
 
 ICT = timezone(timedelta(hours=7))
