@@ -302,7 +302,7 @@ function renderTabs(){
   const el = document.getElementById('tabs');
   const chs = Object.keys(DATA.channels).sort((a,b)=>CH_ORDER.indexOf(a)-CH_ORDER.indexOf(b));
   let h = `<button class="${VIEW==='overview'?'active':''}" onclick="go('overview')">ภาพรวม</button>`;
-  h += `<button class="${VIEW==='compare'?'active':''}" onclick="go('compare')">เปรียบเทียบข่าว</button>`;
+  h += `<button class="${VIEW==='compare'?'active':''}" onclick="go('compare')">เปรียบเทียบ Live รายการข่าว</button>`;
   for(const ch of chs){
     const n = DATA.channels[ch].streams.length;
     h += `<button class="${VIEW===ch?'active':''}" onclick="go('${ch.replace(/'/g,"\\'")}')">${ch}<span class="cnt num">${n}</span></button>`;
@@ -562,7 +562,7 @@ async function renderCompare(){
     }
   }
   const slots = SLOTCMP.slots||[];
-  let h = `<div class="sechead" style="margin-top:0">เปรียบเทียบรายการข่าว</div>
+  let h = `<div class="sechead" style="margin-top:0">เปรียบเทียบ Live รายการข่าว</div>
     <div class="compare-toolbar">
       <span class="range-label">Peak viewers รายวัน · เลือกช่วงข้อมูลที่ต้องการดู</span>
       <div class="range-buttons">
