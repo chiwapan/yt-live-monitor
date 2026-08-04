@@ -152,6 +152,14 @@ def check_if_live(video_ids_list):
                 concurrent = last_viewers
                 print(f"⚠️ {vid}: concurrentViewers missing, using fallback {last_viewers}")
 
+        # NEW-LIVE GUARD: A brand-new live stream (not yet in state) may not have
+        # concurrentViewers populated for the first 1-2 ticks after going live.
+        # Record 0 so we don't drop the opening ticks; later ticks overwrite real values.
+        broadcast = snippet.get("liveBroadcastContent")
+        if concurrent is None and broadcast == "live" and actual_end is None:
+            concurrent = 0
+            print(f"⚠️ {vid}: new live, concurrentViewers not ready yet — recording 0")
+
         if concurrent is not None:
             ch_info = channel_lookup.get(vid, {"channel_name": "Unknown", "channel_id": ""})
             live_streams.append({
