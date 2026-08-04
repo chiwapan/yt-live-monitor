@@ -102,16 +102,21 @@ def load_existing():
                 pass
     return existing
 
-def ingest(path, existing, fallback_title=None):
+def ingest(path, existing, fallback_title=None, no_api=False):
     parsed = parse_html(path)
     if not parsed:
         print(f"SKIP {os.path.basename(path)} — ไม่เจอ Playboard chart/table")
         return 0
     vid, data = parsed
-    title, start = api_video(vid)
+    title, start = None, None
+    if not no_api:
+        title, start = api_video(vid)
     if title is None:
         if fallback_title:
             title, start = fallback_title, ""
+        elif no_api:
+            print(f"SKIP {vid} — --no-api แต่ไม่มี --title ให้ (ต้องระบุ title เสมอ)")
+            return 0
         else:
             print(f"SKIP {vid} — API ไม่พบวิดีโอ (ลบ/private) — ลอง --title \"...\"")
             return 0
@@ -191,6 +196,8 @@ def main():
         del args[i:i + 2]
     do_filter = "--no-filter" not in args
     args = [a for a in args if a != "--no-filter"]
+    no_api = "--no-api" in args
+    args = [a for a in args if a != "--no-api"]
     files = []
     if "--scan-dir" in args:
         d = args[args.index("--scan-dir") + 1] if len(args) > args.index("--scan-dir") + 1 else "/opt/data/cache/documents"
@@ -201,7 +208,7 @@ def main():
     if not files:
         print(__doc__); sys.exit(1)
     existing = load_existing()
-    total = sum(ingest(p, existing, fallback) for p in files)
+    total = sum(ingest(p, existing, fallback, no_api) for p in files)
     print(f"\nรวม: +{total} rows")
     if do_filter:
         filter_prelive()
