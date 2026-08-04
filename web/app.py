@@ -37,7 +37,6 @@ SLOTS = [
     {"name": "ข่าวเช้า", "programs": [
         {"name": "ข่าวเช้าหัวเขียว", "channel": "ThaiRath News", "kw": ["ข่าวเช้าหัวเขียว"]},
         {"name": "คุยข่าวเช้าช่อง8", "channel": "ข่าวช่อง8", "kw": ["คุยข่าวเช้า"]},
-        {"name": "ตะลอนข่าว", "channel": "ThaiRath Variety", "kw": ["ตะลอนข่าว"]},
     ]},
     {"name": "ข่าวเที่ยง", "programs": [
         {"name": "ข่าวเที่ยงไทยรัฐ", "channel": "ThaiRath News", "kw": ["ข่าวเที่ยงไทยรัฐ"]},
