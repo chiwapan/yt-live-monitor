@@ -49,6 +49,7 @@ CHANNELS = [
     {"id": "UCKXg1i42GPbDZDDBs-dzweg", "name": "TERO ENTERTAINMENT"},
     {"id": "UCnMyW2tEZDWWYq-6VIdrDVA", "name": "Phutta Talk"},
     {"id": "UCbJfg1BrJ5hJPlVqDUUv8lg", "name": "sondhitalk"},
+    {"id": "UC5TOFhyb_LxL2VG_Zenhpzw", "name": "Thai PBS"},
     {"id": "UCk1v3FzlMu3r34LYgoHpH2w", "name": "THE STANDARD"},
     {"id": "UCtBu8Wb2BUoduUXJS9Uss7Q", "name": "ช่อง8 Thai Ch8"},
 ]
