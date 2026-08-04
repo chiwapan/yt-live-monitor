@@ -194,6 +194,11 @@ def main():
         i = args.index("--title")
         fallback = args[i + 1]
         del args[i:i + 2]
+    global CHANNEL
+    if "--channel" in args:
+        i = args.index("--channel")
+        CHANNEL = args[i + 1]
+        del args[i:i + 2]
     do_filter = "--no-filter" not in args
     args = [a for a in args if a != "--no-filter"]
     no_api = "--no-api" in args
