@@ -41,6 +41,7 @@ CHANNELS = [
     {"id": "UCzMoibQRslh_1bTuW0YXc6A", "name": "Amarin TV"},
     {"id": "UCXm0bpjlfB0AF-ZdPhT0K1A", "name": "โหนกระแส"},
     {"id": "UC5wKpLWxAZBZrunls3mzwEw", "name": "เรื่องเล่าเช้านี้"},
+    {"id": "UCirZPTc9IoKM_DsA9aKbc4g", "name": "ครอบครัวข่าว3"},
 ]
 
 ICT = timezone(timedelta(hours=7))
