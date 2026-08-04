@@ -146,6 +146,42 @@ def ingest(path, existing, fallback_title=None):
     print(f"{'OK  ' if added else 'DUP '}{vid}  +{added:>2} rows (peak {peak:,})  {title[:45]}")
     return added
 
+def filter_prelive(path=DATA):
+    """Auto-remove pre-live 'waiting' noise rows (leading run of viewers <=20
+    that precedes a real live start, i.e. peak >100 after the run). Only fires
+    when the leading low-value run is long (>=8 rows) — keeps genuine early
+    viewers of real lives (e.g. คุยข่าวเช้า starting at 297) untouched.
+    Returns number of rows removed."""
+    if not os.path.exists(path):
+        return 0
+    rows = [json.loads(l) for l in open(path)]
+    by_vid = {}
+    for r in rows:
+        by_vid.setdefault(r["video_id"], []).append(r)
+    drop_lead = {}
+    for vid, rs in by_vid.items():
+        rs.sort(key=lambda r: r["ts"])
+        lead = 0
+        while lead < len(rs) and rs[lead]["viewers"] <= 20:
+            lead += 1
+        max_after = max((r["viewers"] for r in rs[lead:]), default=0) if lead < len(rs) else 0
+        if lead >= 8 and max_after > 100:
+            drop_lead[vid] = lead
+    if not drop_lead:
+        return 0
+    for vid, rs in by_vid.items():
+        if vid in drop_lead:
+            del by_vid[vid][:drop_lead[vid]]
+    out = [r for rs in by_vid.values() for r in rs]
+    removed = len(rows) - len(out)
+    if removed:
+        with open(path, "w") as f:
+            for r in sorted(out, key=lambda r: (r["video_id"], r["ts"])):
+                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        print(f"🧹 filter_prelive: removed {removed} pre-live noise rows "
+              f"({', '.join(f'{v}+{d}' for v, d in drop_lead.items())})")
+    return removed
+
 def main():
     args = sys.argv[1:]
     fallback = None
@@ -153,6 +189,8 @@ def main():
         i = args.index("--title")
         fallback = args[i + 1]
         del args[i:i + 2]
+    do_filter = "--no-filter" not in args
+    args = [a for a in args if a != "--no-filter"]
     files = []
     if "--scan-dir" in args:
         d = args[args.index("--scan-dir") + 1] if len(args) > args.index("--scan-dir") + 1 else "/opt/data/cache/documents"
@@ -165,6 +203,8 @@ def main():
     existing = load_existing()
     total = sum(ingest(p, existing, fallback) for p in files)
     print(f"\nรวม: +{total} rows")
+    if do_filter:
+        filter_prelive()
 
 if __name__ == "__main__":
     main()
