@@ -39,6 +39,8 @@ CHANNELS = [
     {"id": "UCtc9-CS_FIZ7GGrm8--wsrQ", "name": "ThaiRath Variety"},
     {"id": "UC6x41swVZP3rEmy-ODxLMFA", "name": "ข่าวช่อง8"},
     {"id": "UCzMoibQRslh_1bTuW0YXc6A", "name": "Amarin TV"},
+    {"id": "UCXm0bpjlfB0AF-ZdPhT0K1A", "name": "โหนกระแส"},
+    {"id": "UC5wKpLWxAZBZrunls3mzwEw", "name": "เรื่องเล่าเช้านี้"},
 ]
 
 ICT = timezone(timedelta(hours=7))
