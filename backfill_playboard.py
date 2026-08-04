@@ -102,7 +102,7 @@ def load_existing():
                 pass
     return existing
 
-def ingest(path, existing):
+def ingest(path, existing, fallback_title=None):
     parsed = parse_html(path)
     if not parsed:
         print(f"SKIP {os.path.basename(path)} — ไม่เจอ Playboard chart/table")
@@ -110,8 +110,11 @@ def ingest(path, existing):
     vid, data = parsed
     title, start = api_video(vid)
     if title is None:
-        print(f"SKIP {vid} — API ไม่พบวิดีโอ (ลบ/private) และไม่มี fallback title")
-        return 0
+        if fallback_title:
+            title, start = fallback_title, ""
+        else:
+            print(f"SKIP {vid} — API ไม่พบวิดีโอ (ลบ/private) — ลอง --title \"...\"")
+            return 0
     # resolve date for HH:MM-only rows
     need_date = any(len(ts) <= 5 for ts, _ in data)
     day = None
@@ -145,6 +148,11 @@ def ingest(path, existing):
 
 def main():
     args = sys.argv[1:]
+    fallback = None
+    if "--title" in args:
+        i = args.index("--title")
+        fallback = args[i + 1]
+        del args[i:i + 2]
     files = []
     if "--scan-dir" in args:
         d = args[args.index("--scan-dir") + 1] if len(args) > args.index("--scan-dir") + 1 else "/opt/data/cache/documents"
@@ -155,7 +163,7 @@ def main():
     if not files:
         print(__doc__); sys.exit(1)
     existing = load_existing()
-    total = sum(ingest(p, existing) for p in files)
+    total = sum(ingest(p, existing, fallback) for p in files)
     print(f"\nรวม: +{total} rows")
 
 if __name__ == "__main__":
