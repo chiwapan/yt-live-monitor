@@ -36,6 +36,7 @@ def api_ping():
 SLOTS = [
     {"name": "ข่าวเช้า", "programs": [
         {"name": "ข่าวเช้าหัวเขียว", "channel": "ThaiRath News", "kw": ["ข่าวเช้าหัวเขียว"]},
+        {"name": "ห้องข่าวหัวเขียว", "channel": "ThaiRath News", "kw": ["ห้องข่าวหัวเขียว"]},
         {"name": "คุยข่าวเช้าช่อง8", "channel": "ข่าวช่อง8", "kw": ["คุยข่าวเช้า"]},
     ]},
     {"name": "ข่าวเที่ยง", "programs": [
