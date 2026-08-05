@@ -60,6 +60,7 @@ CHANNELS = [
     {"id": "UCeF5sxjXSdWq80n3RA9gBpw", "name": "TOP NEWS LIVE"},
     {"id": "UC37k-Kxlc7rDpHLZTNytNDw", "name": "Thairath Sport"},
     {"id": "UCygWbILDfBfPN6xR3mrHXHA", "name": "News1"},
+    {"id": "UCzheDCNyul0tRvvoGycjz6A", "name": "Jomquan"},
 ]
 
 ICT = timezone(timedelta(hours=7))
