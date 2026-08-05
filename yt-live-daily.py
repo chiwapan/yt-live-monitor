@@ -61,6 +61,7 @@ CHANNELS = [
     {"id": "UC37k-Kxlc7rDpHLZTNytNDw", "name": "Thairath Sport"},
     {"id": "UCygWbILDfBfPN6xR3mrHXHA", "name": "News1"},
     {"id": "UCzheDCNyul0tRvvoGycjz6A", "name": "Jomquan"},
+    {"id": "UC7d3VlqC5LvvIraCNHBFtjw", "name": "แนวหน้าออนไลน์"},
 ]
 
 ICT = timezone(timedelta(hours=7))
