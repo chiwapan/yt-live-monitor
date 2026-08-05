@@ -62,6 +62,7 @@ SLOTS = [
     ]},
     {"name": "รายการ Talk", "programs": [
         {"name": "Newsroom", "channel": "ThaiRath News", "kw": ["NEWSROOM"]},
+        {"name": "เปิดปาก", "channel": "ThaiRath News", "kw": ["เปิดปาก"]},
         {"name": "ถกไม่เถียง", "channel": "terodigital", "kw": ["ถกไม่เถียง"]},
         {"name": "คนดังนั่งเคลียร์", "channel": "ช่อง8 Thai Ch8", "kw": ["คนดังนั่งเคลียร์"]},
     ]},

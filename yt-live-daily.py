@@ -117,6 +117,47 @@ def get_live_from_rss():
     return all_videos
 
 
+# ─── Live-Search Layer (กัน live หลุดจาก RSS — per-channel เฉพาะช่องหลัก, throttle) ───
+
+# ช่องที่ต้อง monitor live จริง (RSS 15 อัน อาจเบียด live ที่ scheduled ไว้หลุด)
+# คัดจากช่องที่ user ต้องการดู live เปรียบเทียบจริง — จำกัดเพื่อประหยัด quota
+SEARCH_CHANNEL_IDS = [
+    "UCrFDdD-EE05N7gjwZho2wqw",  # ThaiRath News
+    "UCtc9-CS_FIZ7GGrm8--wsrQ",  # ThaiRath Variety
+    "UC6x41swVZP3rEmy-ODxLMFA",  # ข่าวช่อง8
+    "UCtBu8Wb2BUoduUXJS9Uss7Q",  # ช่อง8 Thai Ch8
+    "UCq2_AaNWBd0kxzR1HL2yhsw",  # terodigital
+    "UC7FCQJFK1sfwD_uobB45Xng",  # PPTV HD 36
+]
+
+def get_live_from_search():
+    """Search API eventType=live per-channel (100 units/call) เฉพาะช่องหลัก.
+    Search ระดับ global (regionCode=TH) คืน 0 เสมอ — ต้อง per-channel ถึง reliable.
+    จำกัดช่องเพื่อประหยัด quota; เรียกทุก 2 ชม ผ่าน throttle ใน main."""
+    wanted = {c["id"]: c["name"] for c in CHANNELS}
+    hits = []
+    for ch_id in SEARCH_CHANNEL_IDS:
+        if ch_id not in wanted:
+            continue
+        result = yt_api("search", {
+            "part": "snippet",
+            "channelId": ch_id,
+            "eventType": "live",
+            "type": "video",
+            "maxResults": 10,
+        })
+        for item in result.get("items", []):
+            vid = item["id"].get("videoId")
+            if vid:
+                hits.append({
+                    "video_id": vid,
+                    "title": item["snippet"].get("title", ""),
+                    "channel_id": ch_id,
+                    "channel_name": wanted[ch_id],
+                })
+    return hits
+
+
 def check_if_live(video_ids_list):
     """Check which videos are currently live using videos.list (1 unit/call)."""
     if not video_ids_list:
@@ -437,8 +478,39 @@ def main():
     rss_videos = get_live_from_rss()
     print(f"📡 RSS: found {len(rss_videos)} recent videos")
 
-    # 1b. รวม stream จาก state ที่ยังไม่ ended (กันหลุดจาก RSS — RSS คืนแค่ ~15 ตัว)
+    # 1a. Live-Search layer — กัน live หลุดจาก RSS top-15 (ช่องที่ upload ถี่มาก)
+    #     Search API = 100 units/call หนักมาก → จำกัดให้รันทุก 15 นาที (ทุก 3 tick)
     state_pre = load_state()
+    last_search = state_pre.get("last_live_search_ts", "")
+    do_search = False
+    if last_search:
+        try:
+            from datetime import datetime as _dt
+            last_dt = _dt.strptime(last_search, "%Y-%m-%d %H:%M:%S")
+            do_search = (now - last_dt).total_seconds() >= 7200  # 2 ชม (6 ช่อง × 100 = 600 units/ครั้ง)
+        except Exception:
+            do_search = True
+    else:
+        do_search = True
+
+    if do_search:
+        # per-channel search เฉพาะ 6 ช่องหลัก (100 units/ช่อง) throttle 2 ชม
+        search_videos = get_live_from_search()
+        print(f"🔎 live-search: found {len(search_videos)} live ในช่องหลัก")
+        rss_ids = {v["video_id"] for v in rss_videos}
+        added = 0
+        for v in search_videos:
+            if v["video_id"] not in rss_ids:
+                rss_videos.append(v)
+                added += 1
+        if added:
+            print(f"  ⊕ merged {added} live(s) ที่ RSS ไม่เจอ")
+        state_pre["last_live_search_ts"] = now.strftime("%Y-%m-%d %H:%M:%S")
+        save_state(state_pre)  # persist throttle immediately (main reloads state later)
+    else:
+        print(f"  ⏳ live-search skip (รันครั้งล่าสุด {last_search})")
+
+    # 1b. รวม stream จาก state ที่ยังไม่ ended (กันหลุดจาก RSS — RSS คืนแค่ ~15 ตัว)
     rss_ids = {v["video_id"] for v in rss_videos}
     ch_lookup = {c["id"]: c["name"] for c in CHANNELS}
     for vid, s in state_pre.get("streams", {}).items():
