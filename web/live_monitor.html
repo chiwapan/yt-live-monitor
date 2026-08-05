@@ -27,12 +27,12 @@ body {
   min-height: 100vh;
 }
 .num { font-family: 'Space Grotesk','Noto Sans Thai',sans-serif; font-variant-numeric: tabular-nums; }
-.wrap { max-width: 1400px; margin: 0 auto; padding: 24px 20px 60px; }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 18px 20px 28px; }
 
 /* ── Top bar ── */
 .topbar {
   display: flex; align-items: flex-end; justify-content: space-between;
-  gap: 16px; flex-wrap: wrap; margin-bottom: 20px;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
 }
 .brand { display:flex; align-items:center; gap:12px; }
 .brand .pulse {
@@ -46,7 +46,7 @@ body {
 }
 .brand h1 {
   font-family: 'Space Grotesk','Noto Sans Thai',sans-serif;
-  font-size: 26px; font-weight: 700; letter-spacing: -.5px;
+  font-size: 22px; font-weight: 700; letter-spacing: -.5px;
 }
 .brand h1 span { color: var(--red); }
 .topmeta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
@@ -59,17 +59,27 @@ body {
 @keyframes blink { 50% { opacity:.25; } }
 select#dateSel {
   font-family: 'Space Grotesk','Noto Sans Thai',sans-serif;
-  font-size: 14px; padding: 7px 12px; border-radius: 8px;
+  font-size: 13px; padding: 6px 10px; border-radius: 8px;
   border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer;
+  max-width: 150px;
 }
 select#dateSel:hover { border-color: #b9bec7; }
+/* ── Date nav (prev/next + select) ── */
+.datenav { display:inline-flex; align-items:center; gap:4px; }
+.datenav button {
+  width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line);
+  background: #fff; color: var(--ink); font-size: 16px; line-height: 1; cursor: pointer;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.datenav button:hover:not(:disabled) { border-color:#b9bec7; }
+.datenav button:disabled { opacity:.35; cursor:default; }
 .updated { font-size: 12px; color: var(--muted); }
 
 /* ── Tabs ── */
-.tabs { display:flex; gap:4px; border-bottom: 2px solid var(--line); margin-bottom: 24px; flex-wrap:wrap; }
+.tabs { display:flex; gap:4px; align-items:center; border-bottom: 2px solid var(--line); margin-bottom: 16px; flex-wrap:wrap; }
 .tabs button {
-  font-family: 'Noto Sans Thai',sans-serif; font-size: 14px; font-weight: 500;
-  background: none; border: none; padding: 10px 16px; cursor: pointer;
+  font-family: 'Noto Sans Thai',sans-serif; font-size: 13.5px; font-weight: 500;
+  background: none; border: none; padding: 8px 14px; cursor: pointer;
   color: var(--muted); position: relative; transition: color .15s;
 }
 .tabs button:hover { color: var(--ink); }
@@ -83,24 +93,29 @@ select#dateSel:hover { border-color: #b9bec7; }
   color:var(--muted); border-radius:10px; padding:1px 7px; margin-left:6px;
 }
 .tabs button.active .cnt { background:#fef2f2; color:var(--red); }
+.tabs select {
+  font-family: 'Noto Sans Thai',sans-serif; font-size: 13.5px; font-weight: 500;
+  padding: 7px 10px; margin: 2px 0 8px; border-radius: 8px; border: 1px solid var(--line);
+  background: #fff; color: var(--ink); cursor: pointer;
+}
 
 /* ── Stat strip ── */
-.strip { display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:26px; }
+.strip { display:grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
 .stat {
   background: var(--card); border:1px solid var(--line); border-radius:10px;
-  padding: 16px 18px; transition: transform .15s, box-shadow .15s;
+  padding: 12px 14px; transition: transform .15s, box-shadow .15s;
 }
 .stat:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(16,20,24,.07); }
-.stat .lbl { font-size:11px; font-weight:600; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
-.stat .val { font-family:'Space Grotesk','Noto Sans Thai',sans-serif; font-size:30px; font-weight:700; letter-spacing:-1px; line-height:1; }
-.stat .sub { font-size:12px; color:var(--muted); margin-top:6px; }
+.stat .lbl { font-size:11px; font-weight:600; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+.stat .val { font-family:'Space Grotesk','Noto Sans Thai',sans-serif; font-size:24px; font-weight:700; letter-spacing:-1px; line-height:1; }
+.stat .sub { font-size:12px; color:var(--muted); margin-top:4px; }
 .stat.red .val { color: var(--red); }
 .stat.blue .val { color: var(--blue); }
 
 /* ── Cards / charts ── */
 .panel {
   background: var(--card); border:1px solid var(--line); border-radius:12px;
-  padding: 20px; margin-bottom: 22px;
+  padding: 16px; margin-bottom: 16px;
 }
 .panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
 .panel-head h2 { font-size:16px; font-weight:600; display:flex; align-items:center; gap:10px; }
@@ -108,9 +123,9 @@ select#dateSel:hover { border-color: #b9bec7; }
 .chip { font-size:11px; font-weight:600; padding:2px 9px; border-radius:10px; }
 .chip.live { background:#dcfce7; color:var(--green); }
 .chip.off { background:#f1f2f4; color:var(--muted); }
-.chartbox { position:relative; height:380px; }
-.chartbox.tall { height:440px; }
-.chartbox.fullpage { height: 360px; min-height: 300px; }
+.chartbox { position:relative; height:280px; }
+.chartbox.tall { height:340px; }
+.chartbox.fullpage { height: 280px; min-height: 220px; }
 .compare-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 18px; }
 .compare-toolbar .range-label { font-size:13px; color:var(--muted); }
 .range-buttons { display:flex; gap:6px; }
@@ -143,29 +158,29 @@ select#dateSel:hover { border-color: #b9bec7; }
   .compare-table .delta { margin-left:auto !important; }
   .compare-table .airtime { margin-left:auto; }
 }
-.chartbox.mini { height:170px; }
+.chartbox.mini { height:130px; }
 body.chview .wrap { max-width: 100%; padding-left: 28px; padding-right: 28px; }
 
 /* ── Channel cards grid (overview) ── */
-.chgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; margin-bottom:26px; }
+.chgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; margin-bottom:16px; }
 .chcard {
-  background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px;
+  background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px;
   cursor:pointer; transition: transform .15s, box-shadow .15s, border-color .15s;
-  border-top: 4px solid var(--chcolor,#999);
+  border-top: 3px solid var(--chcolor,#999);
 }
 .chcard:hover { transform:translateY(-3px); box-shadow:0 10px 24px rgba(16,20,24,.09); }
-.chcard .name { font-size:16px; font-weight:700; margin-bottom:2px; display:flex; align-items:center; gap:8px; }
-.chcard .peak { font-family:'Space Grotesk',sans-serif; font-size:38px; font-weight:700; letter-spacing:-1.5px; margin:10px 0 2px; color:var(--chcolor); }
-.chcard .peaklbl { font-size:11px; font-weight:600; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); }
-.chcard .row { display:flex; justify-content:space-between; font-size:13px; padding:7px 0; border-top:1px solid #f0f1f3; margin-top:10px; }
+.chcard .name { font-size:14px; font-weight:700; margin-bottom:2px; display:flex; align-items:center; gap:8px; }
+.chcard .peak { font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-1px; margin:6px 0 1px; color:var(--chcolor); }
+.chcard .peaklbl { font-size:10px; font-weight:600; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); }
+.chcard .row { display:flex; justify-content:space-between; font-size:12px; padding:4px 0; border-top:1px solid #f0f1f3; margin-top:6px; }
 .chcard .row .k { color:var(--muted); }
 .chcard .row .v { font-weight:600; }
-.chcard .go { font-size:12px; color:var(--blue); font-weight:600; margin-top:12px; }
+.chcard .go { font-size:11px; color:var(--blue); font-weight:600; margin-top:6px; }
 
 /* ── Table ── */
 table { width:100%; border-collapse:collapse; }
-th { text-align:left; font-size:11px; font-weight:600; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); padding:10px 14px; border-bottom:2px solid var(--line); white-space:nowrap; }
-td { padding:12px 14px; font-size:13.5px; border-bottom:1px solid #f0f1f3; vertical-align:middle; }
+th { text-align:left; font-size:11px; font-weight:600; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); padding:8px 12px; border-bottom:2px solid var(--line); white-space:nowrap; }
+td { padding:8px 12px; font-size:13px; border-bottom:1px solid #f0f1f3; vertical-align:middle; }
 tbody tr { transition: background .12s; }
 tbody tr:hover { background:#fafbfc; }
 td.t-title { max-width:420px; }
@@ -182,11 +197,11 @@ td.peakcell { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size
   .brand h1 { font-size: 20px; }
   .topbar { gap: 10px; }
   .strip { grid-template-columns: repeat(2,1fr); gap: 10px; }
-  .stat { padding: 12px 14px; }
-  .stat .val { font-size: 22px; }
-  .chartbox { height: 260px; }
-  .chartbox.fullpage { height: 55vh; min-height: 300px; }
-  .chartbox.mini { height: 150px; }
+  .stat { padding: 10px 12px; }
+  .stat .val { font-size: 20px; }
+  .chartbox { height: 220px; }
+  .chartbox.fullpage { height: 40vh; min-height: 220px; }
+  .chartbox.mini { height: 120px; }
   .minigrid { grid-template-columns: 1fr; }
   .tabs button { font-size: 13px; padding: 8px 10px; }
   .sechead { font-size: 16px; margin: 22px 0 10px; }
@@ -222,12 +237,18 @@ td.peakcell { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size
 .minicard .mmeta { font-size:11.5px; color:var(--muted); margin-bottom:10px; }
 .minicard .mmeta b { color:var(--ink); font-family:'Space Grotesk',sans-serif; }
 
-.sechead { font-size:18px; font-weight:700; margin:30px 0 14px; display:flex; align-items:center; gap:10px; }
+.sechead { font-size:16px; font-weight:700; margin:18px 0 10px; display:flex; align-items:center; gap:10px; }
 .sechead::before { content:''; width:5px; height:20px; background:var(--red); border-radius:3px; }
 .backlink { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--blue); text-decoration:none; margin-bottom:16px; }
 .backlink:hover { text-decoration:underline; }
+.morebtn {
+  display:block; width:100%; margin-top:8px; padding:8px; font-family:'Noto Sans Thai',sans-serif;
+  font-size:12.5px; font-weight:600; color:var(--muted); background:#fafbfc;
+  border:1px dashed var(--line); border-radius:8px; cursor:pointer;
+}
+.morebtn:hover { color:var(--ink); border-color:#b9bec7; }
 .empty { text-align:center; color:var(--muted); padding:60px 0; font-size:14px; }
-.footer { text-align:center; font-size:11.5px; color:#9aa0aa; margin-top:30px; }
+.footer { text-align:center; font-size:11.5px; color:#9aa0aa; margin-top:20px; }
 </style>
 </head>
 <body>
@@ -240,7 +261,11 @@ td.peakcell { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size
     </div>
     <div class="topmeta">
       <span class="livenow" id="liveBadge"><span class="d"></span><span id="liveCount">-</span> LIVE</span>
-      <select id="dateSel" onchange="onDateChange()"><option value="">กำลังโหลด...</option></select>
+      <span class="datenav">
+        <button id="datePrev" onclick="shiftDate(1)" title="วันก่อนหน้า">‹</button>
+        <select id="dateSel" onchange="onDateChange()"><option value="">กำลังโหลด...</option></select>
+        <button id="dateNext" onclick="shiftDate(-1)" title="วันถัดไป">›</button>
+      </span>
       <span class="updated num" id="updated"></span>
     </div>
   </div>
@@ -257,14 +282,15 @@ const CH_COLORS = {
   'ข่าวช่อง8':        '#dc2626',   // แดง
   'Amarin TV':        '#0ea5e9',   // น้ำเงินอมฟ้า
 };
-const CH_ORDER = ['ThaiRath News','ThaiRath Variety','ข่าวช่อง8','Amarin TV'];
 
 let DATA = null;
 let SLOTCMP = null;        // /api/slot-compare data (compare view)
 let VIEW = 'overview';      // 'overview' | 'compare' | channel name
 let DATE = null;            // null = ยังไม่เลือก (ใช้วันที่ล่าสุด), '' = ทั้งหมด, 'YYYY-MM-DD' = วันนั้น
 let charts = [];
-let COMPARE_RANGE = 14;       // จำนวนวันที่แสดงในหน้าเปรียบเทียบ; 0 = ทั้งหมด
+let COMPARE_RANGE = 7;      // จำนวนวันที่แสดงในหน้าเปรียบเทียบ; 0 = ทั้งหมด
+let RANK_FULL = false;      // ตาราง Program Ranking: แสดง 10 อันดับแรกก่อน
+let MINI_FULL = false;      // กราฟแยกรายการ: แสดง 6 อันแรกก่อน
 
 function fmt(n){ return (n||0).toLocaleString('th-TH'); }
 function chColor(ch){ return CH_COLORS[ch] || '#64748b'; }
@@ -300,26 +326,56 @@ function destroyCharts(){ charts.forEach(c=>c.destroy()); charts=[]; }
 /* ── Navigation ── */
 function renderTabs(){
   const el = document.getElementById('tabs');
-  const chs = Object.keys(DATA.channels).sort((a,b)=>CH_ORDER.indexOf(a)-CH_ORDER.indexOf(b));
+  const chs = Object.keys(DATA.channels).sort((a,b)=>a.localeCompare(b,'th'));
+  const isCh = VIEW!=='overview' && VIEW!=='compare' && !!DATA.channels[VIEW];
   let h = `<button class="${VIEW==='overview'?'active':''}" onclick="go('overview')">ภาพรวม</button>`;
-  h += `<button class="${VIEW==='compare'?'active':''}" onclick="go('compare')">เปรียบเทียบ Live รายการข่าว</button>`;
-  for(const ch of chs){
-    const n = DATA.channels[ch].streams.length;
-    h += `<button class="${VIEW===ch?'active':''}" onclick="go('${ch.replace(/'/g,"\\'")}')">${ch}<span class="cnt num">${n}</span></button>`;
+  h += `<button class="${VIEW==='compare'?'active':''}" onclick="go('compare')">เปรียบเทียบรายการข่าว</button>`;
+  if(chs.length){
+    h += `<select onchange="if(this.value)go(this.value)">`;
+    h += `<option value="" ${isCh?'':'selected'} disabled>ช่อง…</option>`;
+    for(const ch of chs){
+      const n = DATA.channels[ch].streams.length;
+      h += `<option value="${ch}" ${VIEW===ch?'selected':''}>${ch} (${n})</option>`;
+    }
+    h += `</select>`;
+    if(isCh) h += `<button class="active">${VIEW}</button>`;
   }
   el.innerHTML = h;
 }
 function go(view){
   const switching = (view==='compare') !== (VIEW==='compare');
   VIEW=view;
+  RANK_FULL=false; MINI_FULL=false;
   if(switching) load(); else render();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function onDateChange(){ DATE = document.getElementById('dateSel').value || ''; load(); }
+function shiftDate(dir){  // dir=1 ย้อนหลัง, -1 เดินหน้า
+  const sel = document.getElementById('dateSel');
+  const dates = [...sel.options].map(o=>o.value).filter(Boolean);  // เรียงใหม่→เก่าจาก API
+  dates.sort().reverse();
+  if(!DATE){ // "ทั้งหมด" อยู่ → กดย้อน = วันล่าสุด
+    DATE = dates[0] || ''; load(); return;
+  }
+  const i = dates.indexOf(DATE);
+  if(i < 0){ DATE = dates[0] || ''; load(); return; }
+  const ni = i + dir;
+  if(ni < 0 || ni >= dates.length) return;
+  DATE = dates[ni]; load();
+}
 
 /* ── Overview ── */
+// เรียงการ์ดช่อง: 1) กำลัง LIVE ขึ้นก่อน 2) เรียงตาม peak viewers สูง→ต่ำ
+function channelSortScore(ch){
+  const info = DATA.channels[ch];
+  const live = info.streams.some(s=>s.is_live) ? 1 : 0;
+  return [live, info.peak];
+}
 function renderOverview(){
-  const chs = Object.keys(DATA.channels).sort((a,b)=>CH_ORDER.indexOf(a)-CH_ORDER.indexOf(b));
+  const chs = Object.keys(DATA.channels).sort((a,b)=>{
+    const [la,pa] = channelSortScore(a), [lb,pb] = channelSortScore(b);
+    return (lb-la) || (pb-pa);
+  });
   const allStreams = chs.flatMap(ch=>DATA.channels[ch].streams);
   // Peak สูงสุดของวัน + รายการที่ทำได้
   let topStream = null, topCh = '';
@@ -356,7 +412,8 @@ function renderOverview(){
   <table><thead><tr>
     <th>#</th><th>รายการ</th><th>ช่อง</th><th>Peak</th><th>Peak เมื่อ</th><th>ช่วงเวลา</th>
   </tr></thead><tbody>`;
-  ranked.forEach((s,i)=>{
+  const shown = RANK_FULL ? ranked : ranked.slice(0,10);
+  shown.forEach((s,i)=>{
     const startMs = toICT(s.actual_start||s.start_ts);
     const endMs = toICT(s.end_ts||s.peak_ts);
     const timeRange = startMs&&endMs ? fmtTime(startMs)+'–'+fmtTime(endMs) : '-';
@@ -369,7 +426,9 @@ function renderOverview(){
       <td class="num" data-label="ช่วงเวลา" style="white-space:nowrap">${timeRange}</td>
     </tr>`;
   });
-  h += `</tbody></table></div>`;
+  h += `</tbody></table>`;
+  if(!RANK_FULL && ranked.length > 10) h += `<button class="morebtn" onclick="RANK_FULL=true;render()">แสดงทั้งหมด ${ranked.length} รายการ ↓</button>`;
+  h += `</div>`;
 
   // Combined concurrent chart (sum per channel)
   h += `<div class="panel">
@@ -468,9 +527,10 @@ function renderChannel(ch){
   }
   h += `</tbody></table></div>`;
 
-  // Per-stream mini charts
+  // Per-stream mini charts — แสดง 6 อันแรกก่อน
+  const miniShown = MINI_FULL ? sorted : sorted.slice(0,6);
   h += `<div class="sechead">กราฟแยกรายการ</div><div class="minigrid">`;
-  sorted.slice(0,12).forEach((s,i)=>{
+  miniShown.forEach((s,i)=>{
     h += `<div class="minicard">
       <div class="mtitle"><a class="tlink" href="${s.url}" target="_blank">${s.title}</a></div>
       <div class="mmeta">เริ่ม ${fmtStart(s.actual_start||s.start_ts)} · Peak <b>${fmt(s.peak)}</b> คน ${s.is_live?'· <span style="color:var(--red);font-weight:600;">LIVE</span>':''}</div>
@@ -478,6 +538,7 @@ function renderChannel(ch){
     </div>`;
   });
   h += `</div>`;
+  if(!MINI_FULL && sorted.length > 6) h += `<button class="morebtn" onclick="MINI_FULL=true;render()">แสดงกราฟทั้งหมด ${sorted.length} รายการ ↓</button>`;
 
   document.getElementById('content').innerHTML = h;
 
@@ -512,8 +573,8 @@ function renderChannel(ch){
     }
   }));
 
-  // Mini charts
-  sorted.slice(0,12).forEach((s,i)=>{
+  // Mini charts (ตามจำนวนที่แสดง)
+  (MINI_FULL ? sorted : sorted.slice(0,6)).forEach((s,i)=>{
     charts.push(new Chart(document.getElementById('mini'+i),{
       type:'line',
       data:{datasets:[{
@@ -687,10 +748,15 @@ async function load(){
     const r = await fetch(url);
     DATA = await r.json();
 
-    // date selector
+    // date selector — แสดงเฉพาะ 14 วันล่าสุด + ปุ่ม ‹ › เลื่อนวัน
     const sel = document.getElementById('dateSel');
+    const dates14 = (DATA.dates||[]).slice(0,14);
     sel.innerHTML = '<option value="">ทั้งหมด</option>' +
-      (DATA.dates||[]).map(d=>`<option value="${d}" ${d===DATE?'selected':''}>${d}</option>`).join('');
+      dates14.map(d=>`<option value="${d}" ${d===DATE?'selected':''}>${d}</option>`).join('') +
+      (DATE && !dates14.includes(DATE) ? `<option value="${DATE}" selected>${DATE}</option>` : '');
+    const allDates = (DATA.dates||[]);
+    document.getElementById('datePrev').disabled = !allDates.length || DATE === allDates[allDates.length-1];
+    document.getElementById('dateNext').disabled = !allDates.length || !DATE || DATE === allDates[0];
 
     // live badge + updated
     const liveN = Object.values(DATA.channels).reduce((s,c)=>s+c.streams.filter(x=>x.is_live).length,0);
