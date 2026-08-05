@@ -63,6 +63,7 @@ CHANNELS = [
     {"id": "UCzheDCNyul0tRvvoGycjz6A", "name": "Jomquan"},
     {"id": "UC7d3VlqC5LvvIraCNHBFtjw", "name": "แนวหน้าออนไลน์"},
     {"id": "UCxT3t-i3nX4uAbvXEsyWmsA", "name": "suthichai live"},
+    {"id": "UCJ6PZBK3kOYKBLmvKwdI1gg", "name": "NationTV Live"},
 ]
 
 ICT = timezone(timedelta(hours=7))
