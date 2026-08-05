@@ -58,6 +58,7 @@ CHANNELS = [
     {"id": "UCQ2ABjf4gcrF0-zfDLQhWFQ", "name": "TODAY"},
     {"id": "UC3S5gtXjd522gCtjOkYRUwg", "name": "matichon tv"},
     {"id": "UCeF5sxjXSdWq80n3RA9gBpw", "name": "TOP NEWS LIVE"},
+    {"id": "UC37k-Kxlc7rDpHLZTNytNDw", "name": "Thairath Sport"},
 ]
 
 ICT = timezone(timedelta(hours=7))
