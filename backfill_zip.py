@@ -4,7 +4,7 @@ Usage: python3 backfill_zip.py <zip_path> [--channel NAME] [--video-id ID] [--st
 
 Auto-detects channel from title keywords if not specified.
 """
-import sys, os, csv, json, glob, zipfile, tempfile
+import sys, os, csv, json, zipfile, io
 from datetime import datetime, timedelta
 
 JSONL = "/opt/data/projects/yt-live-monitor/live_data.jsonl"
@@ -23,16 +23,16 @@ def detect_channel(title):
     return None
 
 def parse_zip(zip_path):
-    """Extract liveViewership CSV from zip, return rows."""
-    with tempfile.TemporaryDirectory() as td:
-        with zipfile.ZipFile(zip_path) as z:
-            z.extractall(td)
-        viewers_files = glob.glob(os.path.join(td, "**/liveViewership*"), recursive=True)
+    """Extract liveViewership CSV from zip, return rows.
+    Reads CSV directly from zip entry (avoids filesystem filename-length limits
+    that break extractall on long Thai titles)."""
+    with zipfile.ZipFile(zip_path) as z:
+        viewers_files = [n for n in z.namelist() if "liveViewership" in n]
         if not viewers_files:
             print("ERROR: no liveViewership CSV found in zip")
             sys.exit(1)
-        with open(viewers_files[0], encoding="utf-8-sig") as f:
-            return list(csv.DictReader(f))
+        with z.open(viewers_files[0]) as f:
+            return list(csv.DictReader(io.TextIOWrapper(f, encoding="utf-8-sig")))
 
 def main():
     import argparse
