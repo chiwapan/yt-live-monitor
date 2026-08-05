@@ -52,6 +52,8 @@ CHANNELS = [
     {"id": "UC5TOFhyb_LxL2VG_Zenhpzw", "name": "Thai PBS"},
     {"id": "UCk1v3FzlMu3r34LYgoHpH2w", "name": "THE STANDARD"},
     {"id": "UCtBu8Wb2BUoduUXJS9Uss7Q", "name": "ช่อง8 Thai Ch8"},
+    {"id": "UC7FCQJFK1sfwD_uobB45Xng", "name": "PPTV HD 36"},
+    {"id": "UCq2_AaNWBd0kxzR1HL2yhsw", "name": "terodigital"},
 ]
 
 ICT = timezone(timedelta(hours=7))

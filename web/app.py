@@ -60,6 +60,11 @@ SLOTS = [
         {"name": "Ch7HDNews", "channel": "Ch7HDNews", "kw": ["ข่าวภาคค่ำ"]},
         {"name": "ข่าวเวิร์คพอยท์ 23", "channel": "ข่าวเวิร์คพอยท์ 23", "kw": ["ชงข่าวเขย่าจอ"]},
     ]},
+    {"name": "รายการ Talk", "programs": [
+        {"name": "Newsroom", "channel": "ThaiRath News", "kw": ["NEWSROOM"]},
+        {"name": "ถกไม่เถียง", "channel": "terodigital", "kw": ["ถกไม่เถียง"]},
+        {"name": "คนดังนั่งเคลียร์", "channel": "ช่อง8 Thai Ch8", "kw": ["คนดังนั่งเคลียร์"]},
+    ]},
 ]
 
 
