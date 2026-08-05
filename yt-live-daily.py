@@ -46,6 +46,7 @@ CHANNELS = [
     {"id": "UC3WyfUir0HD8sFI4AVAl6SQ", "name": "ข่าวเวิร์คพอยท์ 23"},
     {"id": "UCDAl2WdfkIbzhRNESXi-3lw", "name": "Dailynews Online"},
     {"id": "UCXUVnTEsLZBim_WlWxBvEwA", "name": "Ch7HD"},
+    {"id": "UC2OtDM92rLjt4mm43ED1Q-w", "name": "Ch7HDNews"},
     {"id": "UCKXg1i42GPbDZDDBs-dzweg", "name": "TERO ENTERTAINMENT"},
     {"id": "UCnMyW2tEZDWWYq-6VIdrDVA", "name": "Phutta Talk"},
     {"id": "UCbJfg1BrJ5hJPlVqDUUv8lg", "name": "sondhitalk"},
