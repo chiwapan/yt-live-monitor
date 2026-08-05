@@ -42,8 +42,6 @@ SLOTS = [
         {"name": "ThaiRath News", "channel": "ThaiRath News", "kw": ["ข่าวเช้าหัวเขียว"]},
         {"name": "Ch7HDNews", "channel": "Ch7HDNews", "kw": ["เช้านี้ที่หมอชิต", "สนามข่าว"]},
         {"name": "Thai PBS", "channel": "Thai PBS", "kw": ["วันใหม่"]},
-        {"name": "เจาะลึกทั่วไทย", "channel": "เจาะลึกทั่วไทย Inside Thailand", "kw": ["เจาะลึกทั่วไทย"]},
-        {"name": "กรรมกรข่าว คุยนอกจอ", "channel": "สรยุทธ สุทัศนะจินดา กรรมกรข่าว", "kw": ["กรรมกรข่าว"]},
     ]},
     {"name": "ข่าวเย็น (16:00)", "programs": [
         {"name": "ข่าวเย็นไทยรัฐ", "channel": "ThaiRath News", "kw": ["ข่าวเย็นไทยรัฐ", "ไทยรัฐทันข่าว"]},
