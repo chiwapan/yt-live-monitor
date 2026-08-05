@@ -280,9 +280,21 @@ const CH_COLORS = {
   'ThaiRath News':    '#16a34a',   // ไทยรัฐ เขียว
   'ThaiRath Variety': '#65a30d',   // ไทยรัฐ เขียวอ่อน (แยกให้ต่างจาก News)
   'ข่าวช่อง8':        '#dc2626',   // แดง
+  'ช่อง8 Thai Ch8':   '#ef4444',   // แดงอ่อน
   'Amarin TV':        '#0ea5e9',   // น้ำเงินอมฟ้า
+  'เรื่องเล่าเช้านี้': '#f59e0b',   // ส้ม (ช่อง 3)
+  'ครอบครัวข่าว3':    '#e11d48',   // แดงเข้ม (ช่อง 3)
+  'ข่าวเวิร์คพอยท์ 23': '#8b5cf6',  // ม่วง
+  'Ch7HDNews':        '#0d9488',   // เขียวอมฟ้า
+  'Ch7HD':            '#0f766e',
+  'Thai PBS':         '#475569',   // เทาเข้ม
+  'terodigital':      '#d97706',   // เหลืองเข้ม
+  'Dailynews Online': '#2563eb',   // น้ำเงิน
 };
-
+function chColor(ch){ return CH_COLORS[ch] || '#64748b'; }
+// ป้าย "ชื่อช่อง · ชื่อรายการ" — ถ้าชื่อซ้ำกันแสดงครั้งเดียว
+function sameName(a,b){ return (a||'').trim().toLowerCase()===(b||'').trim().toLowerCase(); }
+function progLabel(p){ return p.name; }
 let DATA = null;
 let SLOTCMP = null;        // /api/slot-compare data (compare view)
 let VIEW = 'overview';      // 'overview' | 'compare' | channel name
@@ -645,7 +657,7 @@ async function renderCompare(){
     const allDates = new Set();
     slot.programs.forEach(p=>Object.keys(p.days).forEach(d=>allDates.add(d)));
     const latest = [...allDates].sort().reverse()[0];
-    const rows = latest ? slot.programs.map(p=>({name:p.name, peak:p.days[latest]?.peak||0})).filter(x=>x.peak>0).sort((a,b)=>b.peak-a.peak) : [];
+    const rows = latest ? slot.programs.map(p=>({name:progLabel(p), peak:p.days[latest]?.peak||0})).filter(x=>x.peak>0).sort((a,b)=>b.peak-a.peak) : [];
     const winner = rows[0];
     h += `<div class="stat blue">
       <div class="lbl">${slot.name} · ล่าสุด</div>
@@ -667,7 +679,7 @@ async function renderCompare(){
       <div class="tablepanel compare-table" style="margin-top:16px;overflow-x:auto">
       <table><thead><tr><th>วันที่</th>`;
     slot.programs.forEach(p=>{
-      h += `<th class="program-head" style="text-align:right"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${chColor(p.channel)};display:inline-block"></span>${p.name}</span><small>${p.channel}</small></th>`;
+      h += `<th class="program-head" style="text-align:right"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${chColor(p.channel)};display:inline-block"></span>${p.name}</span></th>`;
     });
     h += `</tr></thead><tbody>`;
     dates.forEach(date=>{
@@ -700,7 +712,7 @@ async function renderCompare(){
     charts.push(new Chart(document.getElementById('slotChart'+si),{
       type:'line',
       data:{labels:dates.map(slotDateLabel),datasets:slot.programs.map(p=>({
-        label:p.name,
+        label:progLabel(p),
         data:dates.map(d=>p.days[d]?p.days[d].peak:null),
         borderColor:chColor(p.channel), backgroundColor:chColor(p.channel),
         borderWidth:2.5, tension:.3, spanGaps:true, pointRadius:3, pointHoverRadius:5
