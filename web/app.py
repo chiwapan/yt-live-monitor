@@ -5,6 +5,7 @@ Routes:
   /                → redirect to /live-monitor
   /live-monitor    → dashboard HTML
   /api/live-data   → JSON grouped by channel/stream (for Chart.js)
+  /api/slot-compare → Peak viewers per program per day
   /api/ping        → health check
 
 Config (env):
@@ -34,23 +35,30 @@ def api_ping():
 
 # ── Slot comparison: ข่าวเช้า / เที่ยง / เย็น / Primetime วันต่อวัน ──
 SLOTS = [
-    {"name": "ข่าวเช้า", "programs": [
-        {"name": "ข่าวเช้าหัวเขียว", "channel": "ThaiRath News", "kw": ["ข่าวเช้าหัวเขียว"]},
-        {"name": "ห้องข่าวหัวเขียว", "channel": "ThaiRath News", "kw": ["ห้องข่าวหัวเขียว"]},
-        {"name": "คุยข่าวเช้าช่อง8", "channel": "ข่าวช่อง8", "kw": ["คุยข่าวเช้า"]},
-    ]},
-    {"name": "ข่าวเที่ยง", "programs": [
-        {"name": "ข่าวเที่ยงไทยรัฐ", "channel": "ThaiRath News", "kw": ["ข่าวเที่ยงไทยรัฐ"]},
-        {"name": "ข่าวใหญ่ช่อง8", "channel": "ข่าวช่อง8", "kw": ["ข่าวใหญ่ช่อง8"]},
+    {"name": "Live ข่าวเช้า", "programs": [
+        {"name": "เรื่องเล่าเช้านี้", "channel": "เรื่องเล่าเช้านี้", "kw": ["เรื่องเล่าเช้านี้"]},
+        {"name": "สรยุทธ กรรมกรข่าว", "channel": "สรยุทธ กรรมกรข่าว", "kw": ["กรรมกรข่าว คุยนอกจอ"]},
+        {"name": "ข่าวเวิร์คพอยท์ 23", "channel": "ข่าวเวิร์คพอยท์ 23", "kw": ["ฟลุ้ค"]},
+        {"name": "ข่าวช่อง8", "channel": "ข่าวช่อง8", "kw": ["คุยข่าวเช้า"]},
+        {"name": "ThaiRath News", "channel": "ThaiRath News", "kw": ["ข่าวเช้าหัวเขียว"]},
     ]},
     {"name": "ข่าวเย็น (16:00)", "programs": [
-        {"name": "ข่าวเย็นไทยรัฐ", "channel": "ThaiRath News", "kw": ["ข่าวเย็นไทยรัฐ", "ไทยรัฐทันข่าว"]},  # เสาร์-อาทิตย์ใช้ชื่อ "ไทยรัฐทันข่าว"
+        {"name": "ข่าวเย็นไทยรัฐ", "channel": "ThaiRath News", "kw": ["ข่าวเย็นไทยรัฐ", "ไทยรัฐทันข่าว"]},
         {"name": "คุยข่าวเย็นช่อง8", "channel": "ข่าวช่อง8", "kw": ["คุยข่าวเย็น"]},
     ]},
-    {"name": "ข่าวค่ำ (Primetime 19:00)", "programs": [
-        {"name": "ไทยรัฐนิวส์โชว์", "channel": "ThaiRath News", "kw": ["ไทยรัฐนิวส์โชว์"]},
-        {"name": "ลุยชนข่าว", "channel": "ข่าวช่อง8", "kw": ["ลุยชนข่าว"]},
-        {"name": "ทุบโต๊ะข่าว", "channel": "Amarin TV", "kw": ["ทุบโต๊ะข่าว"]},
+    {"name": "Live ข่าวเที่ยง", "programs": [
+        {"name": "ครอบครัวข่าว3", "channel": "ครอบครัวข่าว3", "kw": ["เที่ยงวันทันเหตุการณ์"]},
+        {"name": "ThaiRath News", "channel": "ThaiRath News", "kw": ["ข่าวเที่ยงไทยรัฐ"]},
+        {"name": "ข่าวช่อง8", "channel": "ข่าวช่อง8", "kw": ["ข่าวใหญ่ช่อง8"]},
+        {"name": "ข่าวเวิร์คพอยท์ 23", "channel": "ข่าวเวิร์คพอยท์ 23", "kw": ["ข่าวเที่ยงเวิร์คพอยท์"]},
+        {"name": "Ch7HDNews", "channel": "Ch7HDNews", "kw": ["ห้องข่าวภาคเที่ยง"]},
+    ]},
+    {"name": "Live ข่าวค่ำ", "programs": [
+        {"name": "ข่าวช่อง8", "channel": "ข่าวช่อง8", "kw": ["ลุยชนข่าว"]},
+        {"name": "ThaiRath News", "channel": "ThaiRath News", "kw": ["ไทยรัฐนิวส์โชว์"]},
+        {"name": "Amarin TV", "channel": "Amarin TV", "kw": ["ทุบโต๊ะข่าว"]},
+        {"name": "Ch7HDNews", "channel": "Ch7HDNews", "kw": ["ข่าวภาคค่ำ"]},
+        {"name": "ข่าวเวิร์คพอยท์ 23", "channel": "ข่าวเวิร์คพอยท์ 23", "kw": ["ชงข่าวเขย่าจอ"]},
     ]},
 ]
 
@@ -198,6 +206,7 @@ def api_live_data():
                 }
                 if dt and (last_dt is None or dt > last_dt):
                     last_dt = dt
+
     except FileNotFoundError:
         return jsonify({"channels": {}, "last_ts": "", "total_samples": 0, "dates": []})
 

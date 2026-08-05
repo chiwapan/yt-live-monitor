@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ข่าวเช้า Top 5 Peak Viewers - 4 ส.ค. 69</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: 'Sarabun', sans-serif; padding: 20px; background: #f5f5f5; }
+    .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h1 { text-align: center; color: #333; }
+    .meta { text-align: center; color: #666; margin-bottom: 20px; font-size: 14px; }
+    canvas { max-height: 400px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📊 เปรียบเทียบ Peak Viewers — ข่าวเช้า Top 5</h1>
+    <div class="meta">วันที่ 4 สิงหาคม 2569 | ข้อมูลจาก live_data.jsonl (poller ทุก 5 นาที)</div>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <script>
+    const ctx = document.getElementById('chart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: [
+          'เรื่องเล่าเช้านี้\nเรื่องเล่าเช้านี้',
+          'สรยุทธ กรรมกรข่าว\nกรรมกรข่าว คุยนอกจอ',
+          'ข่าวเวิร์คพอยท์ 23\nฟลุ้ค น้ำตาแตก',
+          'ข่าวช่อง8\nคุยข่าวเช้าช่อง8',
+          'ThaiRath News\nข่าวเช้าหัวเขียว'
+        ],
+        datasets: [{
+          label: 'Peak Viewers',
+          data: [116595, 38541, 24350, 13828, 12401],
+          backgroundColor: [
+            'rgba(229, 58, 64, 0.85)',   // #e53a40 - เรื่องเล่า
+            'rgba(39, 192, 142, 0.85)',  // #27c08e - สรยุทธ
+            'rgba(255, 159, 10, 0.85)',  // orange - เวิร์คพอยท์
+            'rgba(54, 162, 235, 0.85)',  // blue - ช่อง8
+            'rgba(153, 102, 255, 0.85)'  // purple - ThaiRath
+          ],
+          borderColor: [
+            '#e53a40', '#27c08e', '#ff9f0a', '#36a2eb', '#9966ff'
+          ],
+          borderWidth: 2,
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => `Peak: ${ctx.raw.toLocaleString()} viewers`
+            }
+          },
+          title: {
+            display: true,
+            text: 'Top 5 Morning News Programs by Peak Concurrent Viewers',
+            font: { size: 14 }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: 'Peak Concurrent Viewers' },
+            ticks: {
+              callback: v => v.toLocaleString()
+            }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>
