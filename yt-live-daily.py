@@ -55,6 +55,7 @@ CHANNELS = [
     {"id": "UC7FCQJFK1sfwD_uobB45Xng", "name": "PPTV HD 36"},
     {"id": "UCq2_AaNWBd0kxzR1HL2yhsw", "name": "terodigital"},
     {"id": "UCqZ3is1Z4ck-I0ObYFw8OEQ", "name": "ข่าวช่องวัน"},
+    {"id": "UCQ2ABjf4gcrF0-zfDLQhWFQ", "name": "TODAY"},
 ]
 
 ICT = timezone(timedelta(hours=7))
