@@ -65,6 +65,9 @@ CHANNELS = [
     {"id": "UCxT3t-i3nX4uAbvXEsyWmsA", "name": "suthichai live"},
     {"id": "UCJ6PZBK3kOYKBLmvKwdI1gg", "name": "NationTV Live"},
     {"id": "UCqUBA96OsqMgSFvTwLXY9yw", "name": "TNN"},
+    {"id": "UCv1QMOzm4RPDtm8-JchAkkw", "name": "SiroteTalk"},
+    {"id": "UCDI9EEC4ZstO4v-Sg8vlfBQ", "name": "อาร์ท เอกรัฐ"},
+    {"id": "UCOFvLl4bKwCIZg0r4EBQLug", "name": "ThaiPBSNews"},
 ]
 
 ICT = timezone(timedelta(hours=7))
