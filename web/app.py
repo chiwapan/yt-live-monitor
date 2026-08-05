@@ -37,10 +37,13 @@ def api_ping():
 SLOTS = [
     {"name": "Live ข่าวเช้า", "programs": [
         {"name": "เรื่องเล่าเช้านี้", "channel": "เรื่องเล่าเช้านี้", "kw": ["เรื่องเล่าเช้านี้"]},
-        {"name": "สรยุทธ กรรมกรข่าว", "channel": "สรยุทธ กรรมกรข่าว", "kw": ["กรรมกรข่าว คุยนอกจอ"]},
-        {"name": "ข่าวเวิร์คพอยท์ 23", "channel": "ข่าวเวิร์คพอยท์ 23", "kw": ["ฟลุ้ค"]},
+        {"name": "ข่าวเวิร์คพอยท์ 23", "channel": "ข่าวเวิร์คพอยท์ 23", "kw": ["ข่าวเช้า"]},
         {"name": "ข่าวช่อง8", "channel": "ข่าวช่อง8", "kw": ["คุยข่าวเช้า"]},
         {"name": "ThaiRath News", "channel": "ThaiRath News", "kw": ["ข่าวเช้าหัวเขียว"]},
+        {"name": "Ch7HDNews", "channel": "Ch7HDNews", "kw": ["เช้านี้ที่หมอชิต", "สนามข่าว"]},
+        {"name": "Thai PBS", "channel": "Thai PBS", "kw": ["วันใหม่"]},
+        {"name": "เจาะลึกทั่วไทย", "channel": "เจาะลึกทั่วไทย Inside Thailand", "kw": ["เจาะลึกทั่วไทย"]},
+        {"name": "กรรมกรข่าว คุยนอกจอ", "channel": "สรยุทธ สุทัศนะจินดา กรรมกรข่าว", "kw": ["กรรมกรข่าว"]},
     ]},
     {"name": "ข่าวเย็น (16:00)", "programs": [
         {"name": "ข่าวเย็นไทยรัฐ", "channel": "ThaiRath News", "kw": ["ข่าวเย็นไทยรัฐ", "ไทยรัฐทันข่าว"]},
@@ -61,7 +64,7 @@ SLOTS = [
         {"name": "ข่าวเวิร์คพอยท์ 23", "channel": "ข่าวเวิร์คพอยท์ 23", "kw": ["ชงข่าวเขย่าจอ"]},
     ]},
     {"name": "รายการ Talk", "programs": [
-        {"name": "Newsroom", "channel": "ThaiRath News", "kw": ["NEWSROOM"]},
+        {"name": "Newsroom", "channel": "ThaiRath News", "kw": ["NEWSROOM", "นิวส์รูม"]},
         {"name": "เปิดปาก", "channel": "ThaiRath News", "kw": ["เปิดปาก"]},
         {"name": "ถกไม่เถียง", "channel": "terodigital", "kw": ["ถกไม่เถียง"]},
         {"name": "คนดังนั่งเคลียร์", "channel": "ช่อง8 Thai Ch8", "kw": ["คนดังนั่งเคลียร์"]},
