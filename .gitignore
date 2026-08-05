@@ -3,3 +3,5 @@ live_data.jsonl
 .env
 __pycache__/
 live_data.jsonl.bak*
+backfill_queue.tsv
+backfill_queue.done
