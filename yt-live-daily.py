@@ -56,6 +56,7 @@ CHANNELS = [
     {"id": "UCq2_AaNWBd0kxzR1HL2yhsw", "name": "terodigital"},
     {"id": "UCqZ3is1Z4ck-I0ObYFw8OEQ", "name": "ข่าวช่องวัน"},
     {"id": "UCQ2ABjf4gcrF0-zfDLQhWFQ", "name": "TODAY"},
+    {"id": "UC3S5gtXjd522gCtjOkYRUwg", "name": "matichon tv"},
 ]
 
 ICT = timezone(timedelta(hours=7))
