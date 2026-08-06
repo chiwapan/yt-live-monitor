@@ -171,14 +171,20 @@ tr.click:hover{background:#f8fafc;}
 <script>
 window.onerror=function(m,s,l,c,err){console.log('ERR:'+(err&&err.stack||m));document.getElementById('loading').textContent='JS Error: '+(err&&err.stack||m);};
 const CH = {
-  news:   {name:'ThaiRath News',  color:'#1d4ed8', short:'News'},
-  variety:{name:'Variety',        color:'#7c3aed', short:'Var'},
-  ch8:    {name:'ข่าวช่อง8',        color:'#dc2626', short:'CH8'},
-  amarin: {name:'Amarin TV',      color:'#0891b2', short:'Amarin'},
-  hon:    {name:'โหนกระแส',        color:'#16a34a', short:'Hon'},
-  rueang: {name:'เรื่องเล่าเช้านี้', color:'#d97706', short:'Rueang'},
-  krob:   {name:'ครอบครัวข่าว3',    color:'#db2777', short:'Krob'}
+  'UCrFDdD-EE05N7gjwZho2wqw':{name:'ThaiRath News', color:'#1d4ed8', short:'News'},
+  'UCtc9-CS_FIZ7GGrm8--wsrQ':{name:'ThaiRath Variety', color:'#7c3aed', short:'Var'},
+  'UC6x41swVZP3rEmy-ODxLMFA':{name:'ข่าวช่อง8', color:'#dc2626', short:'CH8'},
+  'UCzMoibQRslh_1bTuW0YXc6A':{name:'Amarin TV', color:'#0891b2', short:'Amarin'},
+  'UCXm0bpjlfB0AF-ZdPhT0K1A':{name:'โหนกระแส', color:'#16a34a', short:'Hon'},
+  'UC5wKpLWxAZBZrunls3mzwEw':{name:'เรื่องเล่าเช้านี้', color:'#d97706', short:'Rueang'},
+  'UCirZPTc9IoKM_DsA9aKbc4g':{name:'ครอบครัวข่าว3', color:'#db2777', short:'Krob'}
 };
+// fallback สำหรับช่องที่เกิน 7 ตัว (competitor) — ใช้ชื่อจาก data + สีแบบ hash
+const CH_COLORS=['#0ea5e9','#f59e0b','#10b981','#8b5cf6','#ef4444','#ec4899','#14b8a6','#6366f1','#f97316','#22c55e','#eab308','#3b82f6','#a855f7','#06b6d4','#84cc16','#f43f5e'];
+function chanColor(cid){ let h=0; for(let i=0;i<cid.length;i++) h=(h*31+cid.charCodeAt(i))>>>0; return CH_COLORS[h%CH_COLORS.length]; }
+function chanShort(cid){ const m=CH[cid]; return m?m.short:(cid.slice(0,2).toUpperCase()); }
+function chanName(cid,fallback){ const m=CH[cid]; return m?m.name:(fallback||cid); }
+function chanMeta(cid,fallback){ const m=CH[cid]; return m?m:{name:chanName(cid,fallback), color:chanColor(cid), short:chanShort(cid)}; }
 const fmt = n => n>=1e6 ? (n/1e6).toFixed(2)+'M' : n>=1e3 ? (n/1e3).toFixed(0)+'K' : ''+Math.round(n);
 const pct = (a,b) => b? ((a-b)/b*100) : 0;
 
@@ -212,8 +218,8 @@ function buildRows(){
     Object.keys(byCh).forEach(cid=>{
       // snapshot ไม่มีวันก่อน → ไม่มี delta
       byCh[cid].forEach(r=> rows.push({
-        ch: cid, t:r.title, type: r.is_short_est?'short':'video',
-        v: r.view_count, pv:null, _live:true
+        ch: cid, cn: r.channel||'', t:r.title, type: r.is_short_est?'short':'video',
+        v: r.view_count, pv:null, _live:true, vid: r.video_id||''
       }));
     });
     return rows;
@@ -233,7 +239,7 @@ function buildRows(){
     RAW.batch.filter(r=>r.video_id && r.date===prev).forEach(r=> prevMap[r.video_id]=r.views);
     return rows.map(r=>({
       ch:r.channel_id, t:r.title||'(ไม่ระบุชื่อ)', type: r.product==='SHORTS'?'short':'video',
-      v:r.views, pv: prevMap[r.video_id] ?? null, _live:false
+      v:r.views, pv: prevMap[r.video_id] ?? null, _live:false, vid: r.video_id||''
     }));
   }
 }
@@ -252,13 +258,13 @@ function renderKPI(rows){
   const byCh={}; f.forEach(d=>byCh[d.ch]=(byCh[d.ch]||0)+d.v);
   const champ = Object.entries(byCh).sort((a,b)=>b[1]-a[1])[0];
   const top = sorted(f)[0];
-  const champName = champ ? (CH[champ[0]] ? CH[champ[0]].name : '—') : '—';
-  const champColor = champ && CH[champ[0]] ? CH[champ[0]].color : 'var(--ink)';
+  const champName = champ ? chanMeta(champ[0]).name : '—';
+  const champColor = champ ? chanMeta(champ[0]).color : 'var(--ink)';
   const champV = champ ? champ[1] : 0;
   document.getElementById('kpis').innerHTML = `
     <div class="kpi"><div class="lab">ยอดวิวรวม (${state.src==='live'?'สด':'รายวัน'})</div><div class="val num">${fmt(total)}</div><div class="sub">Short ${fmt(shorts)} · Video ${fmt(total-shorts)}</div></div>
     <div class="kpi"><div class="lab">ช่องแชมป์</div><div class="val num sm" style="color:${champColor}">${champName}</div><div class="sub">${champ?fmt(champV)+' วิว':'—'}</div></div>
-    <div class="kpi"><div class="lab">${state.src==='live'?'วิวสดสูงสุด':'วิดีโอวิวสูงสุด'}</div><div class="val num sm">${top?fmt(top.v):'—'}</div><div class="sub">${top?CH[top.ch].name:'—'}</div></div>
+    <div class="kpi"><div class="lab">${state.src==='live'?'วิวสดสูงสุด':'วิดีโอวิวสูงสุด'}</div><div class="val num sm">${top?fmt(top.v):'—'}</div><div class="sub">${top?chanMeta(top.ch,top.t).name:'—'}</div></div>
     <div class="kpi"><div class="lab">Short share</div><div class="val num">${share}</div><div class="sub">สัดส่วนวิวจาก Short</div></div>`;
 }
 
@@ -273,7 +279,7 @@ function renderLeaderboard(rows){
     const tr = document.createElement('tr'); tr.className='click';
     tr.innerHTML = `<td><span class="rank ${i<3?'top':''}">${i+1}</span></td>
       <td><span class="chip-ch" style="background:${CH[d.ch].color}">${CH[d.ch].name}</span></td>
-      <td class="vtitle" title="${d.t}">${d.t}</td>
+      <td class="vtitle" title="${d.t}">${d.vid?`<a href="https://www.youtube.com/watch?v=${d.vid}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;" title="เปิดคลิปใน YouTube">${d.t}</a>`:d.t}</td>
       <td>${d.type==='short'?'<span class="chip-short">SHORT</span>':'<span class="chip-core">VIDEO</span>'}</td>
       <td class="num">${fmt(d.v)}</td>
       <td class="num">${dp==null?'<span style="color:var(--muted)">—</span>':`<span class="delta ${dcls}">${dsign} ${Math.abs(dp).toFixed(1)}%</span>`}</td>`;
