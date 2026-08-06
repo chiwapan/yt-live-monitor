@@ -72,7 +72,8 @@ CHANNELS = [
 ]
 
 ICT = timezone(timedelta(hours=7))
-STATE_FILE = "/tmp/yt-live-daily-state.json"
+STATE_FILE = os.environ.get("STATE_FILE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "yt-live-daily-state.json"))
 
 
 def floor_5min(dt):
@@ -450,7 +451,8 @@ def setup_sheet_tabs():
 
 
 # ─── Local JSONL store (for dashboard) ───
-JSONL_FILE = "/opt/data/projects/yt-live-monitor/live_data.jsonl"
+JSONL_FILE = os.environ.get("LIVE_JSONL",
+    "/opt/data/projects/yt-live-monitor/live_data.jsonl")
 
 def append_local_jsonl(live_streams, now):
     """Append live samples to local JSONL — dashboard reads this directly."""

@@ -1,0 +1,63 @@
+# yt-live-monitor — แยกจาก Hermes อย่างสมบูรณ์ (อยู่ server เดียวกัน)
+# ใช้กับ Hostinger Docker Manager → ปุ่ม Compose (วางไฟล์นี้)
+#
+# ก่อนวาง: ต้องมี .env อยู่ข้าง ๆ ไฟล์นี้ ประกอบด้วย:
+#   YOUTUBE_API_KEY=...
+#   YT_SHEET_ID=...
+#   GAPI_SCRIPT=/app/google_api.py
+#   CF_TUNNEL_TOKEN=...   (token ของ named tunnel "oasis-dashboard" เดิม)
+#
+# เก็บข้อมูล (live_data.jsonl + state) ใน volume ของ app นี้เอง — เป็นอิสระจาก Hermes
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yt-live-monitor-web
+    restart: unless-stopped
+    ports:
+      - "8899:8899"
+    environment:
+      - PORT=8899
+      - LIVE_JSONL=/data/live_data.jsonl
+    volumes:
+      - yt_live_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8899/api/ping',timeout=4)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+  collector:
+    build:
+      context: .
+      dockerfile: Dockerfile.collector
+    container_name: yt-live-monitor-collector
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Bangkok
+      - LIVE_JSONL=/data/live_data.jsonl
+      - STATE_FILE=/data/yt-live-daily-state.json
+      - GAPI_SCRIPT=/app/google_api.py
+    volumes:
+      - yt_live_data:/data
+
+  # Cloudflare tunnel — serve live.chiwapan.online -> localhost:8899
+  # network_mode: host → เห็น localhost:8899 ที่ web publish ไว้ (เหมือน config เดิมใน Hermes)
+  # ไม่ต้องแก้ ingress ใน Cloudflare dashboard
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: yt-live-monitor-tunnel
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
+    command: tunnel run --token ${CF_TUNNEL_TOKEN}
+    depends_on:
+      - web
+
+volumes:
+  yt_live_data:

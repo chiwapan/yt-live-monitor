@@ -1,0 +1,22 @@
+# Collector for yt-live-monitor — polls YouTube + writes to Google Sheets/JSONL
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# Core collector
+COPY yt-live-daily.py .
+COPY run_collector.py .
+# Google Sheets helper (from Hermes workspace, made standalone)
+COPY google_api.py .
+COPY _hermes_home.py .
+# Sheets token + state
+COPY token_sheets.json .
+COPY yt-live-daily-state.json ./
+
+ENV TZ=Asia/Bangkok \
+    LIVE_JSONL=/data/live_data.jsonl \
+    GAPI_SCRIPT=/app/google_api.py \
+    PYTHONUNBUFFERED=1
+
+# Poll every 5 min in an internal loop (no external cron needed)
+CMD ["python", "run_collector.py"]
