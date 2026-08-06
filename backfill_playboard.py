@@ -21,6 +21,44 @@ DATA = os.path.join(BASE, "live_data.jsonl")
 CHANNEL = "ข่าวช่อง8"
 YEAR = "2026"  # พ.ศ. 2569
 
+# channelId (ใน Playboard URL) → ชื่อช่อง (ตรงกับ CHANNELS ใน yt-live-daily.py)
+CHANNEL_ID_MAP = {
+    "UCrFDdD-EE05N7gjwZho2wqw": "ThaiRath News",
+    "UCtc9-CS_FIZ7GGrm8--wsrQ": "ThaiRath Variety",
+    "UC6x41swVZP3rEmy-ODxLMFA": "ข่าวช่อง8",
+    "UCzMoibQRslh_1bTuW0YXc6A": "Amarin TV",
+    "UCXm0bpjlfB0AF-ZdPhT0K1A": "โหนกระแส",
+    "UC5wKpLWxAZBZrunls3mzwEw": "เรื่องเล่าเช้านี้",
+    "UCirZPTc9IoKM_DsA9aKbc4g": "ครอบครัวข่าว3",
+    "UC4kPIfdCZrPqoQ94m6-eFsg": "สรยุทธ กรรมกรข่าว",
+    "UC3WyfUir0HD8sFI4AVAl6SQ": "ข่าวเวิร์คพอยท์ 23",
+    "UCDAl2WdfkIbzhRNESXi-3lw": "Dailynews Online",
+    "UCXUVnTEsLZBim_WlWxBvEwA": "Ch7HD",
+    "UC2OtDM92rLjt4mm43ED1Q-w": "Ch7HD",  # ช่องหลัก 7HD
+    "UCKXg1i42GPbDZDDBs-dzweg": "TERO ENTERTAINMENT",
+    "UCnMyW2tEZDWWYq-6VIdrDVA": "Phutta Talk",
+    "UCbJfg1BrJ5hJPlVqDUUv8lg": "sondhitalk",
+    "UC5TOFhyb_LxL2VG_Zenhpzw": "Thai PBS",
+    "UCk1v3FzlMu3r34LYgoHpH2w": "THE STANDARD",
+    "UCtBu8Wb2BUoduUXJS9Uss7Q": "ช่อง8 Thai Ch8",
+    "UC7FCQJFK1sfwD_uobB45Xng": "PPTV HD 36",
+    "UCq2_AaNWBd0kxzR1HL2yhsw": "terodigital",
+    "UCqZ3is1Z4ck-I0ObYFw8OEQ": "ข่าวช่องวัน",
+    "UCQ2ABjf4gcrF0-zfDLQhWFQ": "TODAY",
+    "UC3S5gtXjd522gCtjOkYRUwg": "matichon tv",
+    "UCeF5sxjXSdWq80n3RA9gBpw": "TOP NEWS LIVE",
+    "UC37k-Kxlc7rDpHLZTNytNDw": "Thairath Sport",
+    "UCygWbILDfBfPN6xR3mrHXHA": "News1",
+    "UCzheDCNyul0tRvvoGycjz6A": "Jomquan",
+    "UC7d3VlqC5LvvIraCNHBFtjw": "แนวหน้าออนไลน์",
+    "UCxT3t-i3nX4uAbvXEsyWmsA": "suthichai live",
+    "UCJ6PZBK3kOYKBLmvKwdI1gg": "NationTV Live",
+    "UCqUBA96OsqMgSFvTwLXY9yw": "TNN",
+    "UCv1QMOzm4RPDtm8-JchAkkw": "SiroteTalk",
+    "UCDI9EEC4ZstO4v-Sg8vlfBQ": "อาร์ท เอกรัฐ",
+    "UCOFvLl4bKwCIZg0r4EBQLug": "ThaiPBSNews",
+}
+
 def load_key():
     env = os.path.join(BASE, ".env")
     if os.path.exists(env):
@@ -49,12 +87,14 @@ def api_video(vid):
         return None, None
 
 def parse_html(path):
-    """Return (video_id, [(ts_time, viewers), ...]) or None."""
+    """Return (video_id, channel_id, [(ts_time, viewers), ...]) or None."""
     html = open(path, encoding="utf-8", errors="replace").read()
     m = re.search(r'playboard\.co/en/video/([A-Za-z0-9_-]{6,})', html)
     if not m:
         return None
     vid = m.group(1)
+    cm = re.search(r'channelId=([A-Za-z0-9_-]{6,})', html)
+    channel_id = cm.group(1) if cm else ""
     # hidden a11y table rows
     rows = re.findall(r'<tr><td>([^<]+)</td><td>([^<]*)</td>', html)
     data = []
@@ -72,7 +112,7 @@ def parse_html(path):
         m3 = re.match(r'(\d{2}):(\d{2})', cell)
         if m3:
             data.append((f"{m3.group(1)}:{m3.group(2)}", int(val)))
-    return (vid, data) if data else None
+    return (vid, channel_id, data) if data else None
 
 def date_from_title(title):
     """Try '16 กรกฎาคม 2569' / '16-07-69' patterns -> '2026-07-16'."""
@@ -102,12 +142,18 @@ def load_existing():
                 pass
     return existing
 
-def ingest(path, existing, fallback_title=None, no_api=False, day_override=None):
+def ingest(path, existing, fallback_title=None, no_api=False, day_override=None, channel_override=None):
     parsed = parse_html(path)
     if not parsed:
         print(f"SKIP {os.path.basename(path)} — ไม่เจอ Playboard chart/table")
         return 0
-    vid, data = parsed
+    vid, channel_id, data = parsed
+    # ช่อง: --channel (ถ้ามี) > auto-detect จาก channelId > default
+    channel_name = CHANNEL
+    if channel_override:
+        channel_name = channel_override
+    elif channel_id and channel_id in CHANNEL_ID_MAP:
+        channel_name = CHANNEL_ID_MAP[channel_id]
     title, start = None, None
     if not no_api:
         title, start = api_video(vid)
@@ -146,7 +192,7 @@ def ingest(path, existing, fallback_title=None, no_api=False, day_override=None)
             if (vid, ts) in existing:
                 continue
             f.write(json.dumps({"ts": ts, "video_id": vid, "title": title,
-                                "viewers": v, "channel": CHANNEL, "url": url,
+                                "viewers": v, "channel": channel_name, "url": url,
                                 "actual_start": start or ""}, ensure_ascii=False) + "\n")
             existing[(vid, ts)] = True
             added += 1
@@ -263,8 +309,10 @@ def main():
         fallback = args[i + 1]
         del args[i:i + 2]
     global CHANNEL
+    channel_override = None
     if "--channel" in args:
         i = args.index("--channel")
+        channel_override = args[i + 1]
         CHANNEL = args[i + 1]
         del args[i:i + 2]
     do_filter = "--no-filter" not in args
@@ -286,7 +334,7 @@ def main():
     if not files:
         print(__doc__); sys.exit(1)
     existing = load_existing()
-    total = sum(ingest(p, existing, fallback, no_api, day_override) for p in files)
+    total = sum(ingest(p, existing, fallback, no_api, day_override, channel_override) for p in files)
     print(f"\nรวม: +{total} rows")
     if do_filter:
         filter_prelive()
