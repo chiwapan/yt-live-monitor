@@ -254,10 +254,10 @@ def api_live_data():
     except FileNotFoundError:
         return jsonify({"channels": {}, "last_ts": "", "total_samples": 0, "dates": []})
 
-    # "current" = stream มีข้อมูลใน 7 นาทีล่าสุดของเวลาจริง (cron เก็บทุก 5 นาที)
-    # ใช้เวลาปัจจุบัน ไม่ใช่ last_dt — ไม่งั้นดูวันย้อนหลังทุกอย่างจะขึ้น LIVE
+    # "current" = stream มีข้อมูลใน 12 นาทีล่าสุดของเวลาจริง (cron เก็บทุก 5 นาที)
+    # margin 12นาที > round 5นาที กัน false 0 LIVE ตอน collector delay
     now_naive_ict = datetime.now(timezone(timedelta(hours=7))).replace(tzinfo=None)
-    cutoff = now_naive_ict - timedelta(minutes=7)
+    cutoff = now_naive_ict - timedelta(minutes=12)
 
     channels = {}
     for ch, vids in streams.items():
