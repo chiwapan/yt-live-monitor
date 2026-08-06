@@ -44,6 +44,12 @@ services:
     volumes:
       - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/live_data.jsonl:/data/live_data.jsonl
       - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/yt-live-daily-state.json:/data/yt-live-daily-state.json
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,time; s=os.path.getmtime('/data/live_data.jsonl'); print('stale' if time.time()-s>420 else 'ok'); raise SystemExit(1 if time.time()-s>420 else 0)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # Cloudflare tunnel — serve live.chiwapan.online -> localhost:8899
   # network_mode: host เห็น localhost:8899 ที่ web publish (เหมือน config เดิมใน Hermes)
