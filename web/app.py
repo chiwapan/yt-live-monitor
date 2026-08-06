@@ -122,13 +122,15 @@ def api_slot_compare():
                         "end": dt,
                         "points": [],
                     }
-                if d.get("viewers", 0) > s["peak"]:
-                    s["peak"] = d["viewers"]
+                v = d.get("viewers")
+                v = v if isinstance(v, (int, float)) else 0
+                if v > s["peak"]:
+                    s["peak"] = v
                 if dt < s["start"]:
                     s["start"] = dt
                 if dt > s["end"]:
                     s["end"] = dt
-                s["points"].append((d["ts"], d.get("viewers", 0)))
+                s["points"].append((d["ts"], v))
 
         # PREMIERE FILTER: a premiere never has live concurrentViewers, so its captured
         # rows are all 0 → peak==0. Drop them so premieres never show in slot comparison.
