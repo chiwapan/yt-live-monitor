@@ -53,7 +53,6 @@ services:
 
   # Cloudflare tunnel — serve live.chiwapan.online -> localhost:8899
   # network_mode: host เห็น localhost:8899 ที่ web publish (เหมือน config เดิมใน Hermes)
-  # ใช้ sh -c เอา token จาก env แทน interpolation เชิง compose
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: yt-live-monitor-tunnel
@@ -61,6 +60,6 @@ services:
     network_mode: host
     env_file:
       - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
-    command: ["sh", "-c", "cloudflared tunnel run --token \"$CF_TUNNEL_TOKEN\""]
+    command: tunnel run --token ${CF_TUNNEL_TOKEN}
     depends_on:
       - web
