@@ -120,6 +120,10 @@ def api_slot_compare():
                     s["start"] = dt
                 if dt > s["end"]:
                     s["end"] = dt
+
+        # PREMIERE FILTER: a premiere never has live concurrentViewers, so its captured
+        # rows are all 0 → peak==0. Drop them so premieres never show in slot comparison.
+        streams = {k: s for k, s in streams.items() if s["peak"] > 0}
     except FileNotFoundError:
         return jsonify({"slots": [], "last_ts": ""})
 
@@ -231,6 +235,12 @@ def api_live_data():
         for vid, points in vids.items():
             points.sort(key=lambda p: (p["dt"] or datetime.min))
             peak = max(p["viewers"] for p in points)
+            # PREMIERE FILTER: a premiere never has live concurrentViewers → all
+            # captured rows are 0 → peak==0. Skip so premieres never render on the
+            # dashboard (defense-in-depth; collector already skips them).
+            if peak == 0:
+                total -= len(points)
+                continue
             peak_pt = next(p for p in points if p["viewers"] == peak)
             last_pt = points[-1]
             is_live = bool(last_pt["dt"] and last_pt["dt"] >= cutoff)

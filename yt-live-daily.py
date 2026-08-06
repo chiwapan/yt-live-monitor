@@ -204,31 +204,25 @@ def check_if_live(video_ids_list):
         actual_end = live_details.get("actualEndTime")
         broadcast = snippet.get("liveBroadcastContent")
 
-        # PREMIERE DETECTION: A YouTube Premiere also sets liveBroadcastContent="live"
-        # during the event, but the Data API NEVER returns concurrentViewers for a
-        # premiere (only for true live broadcasts). So if we've already polled this video
-        # (it's in state) and it STILL has no concurrentViewers field → it's a Premiere,
-        # not a real live. Flag & skip so premieres don't pollute the live ranking/summary
-        # with fake 0-viewer rows.
-        if (concurrent is None and broadcast == "live" and actual_end is None
-                and vid in state.get("streams", {})):
-            print(f"🎬 {vid}: Premiere — no concurrentViewers, not a real live. Skipped.")
-            continue
-
-        # If concurrentViewers is missing but stream is still live (no endTime),
-        # use last known viewers from state as fallback
-        if concurrent is None and actual_end is None and vid in state.get("streams", {}):
-            last_viewers = state["streams"][vid].get("last_viewers")
-            if last_viewers is not None:
-                concurrent = last_viewers
-                print(f"⚠️ {vid}: concurrentViewers missing, using fallback {last_viewers}")
-
-        # NEW-LIVE GUARD: A brand-new live stream (not yet in state) may not have
-        # concurrentViewers populated for the first 1-2 ticks after going live.
-        # Record 0 so we don't drop the opening ticks; later ticks overwrite real values.
+        # PREMIERE / NON-LIVE DETECTION:
+        # A YouTube Premiere sets liveBroadcastContent="live" during the event, but the
+        # Data API NEVER returns concurrentViewers for a premiere (only real live
+        # broadcasts have that field, even "0"). So concurrentViewers absent + still
+        # "live" + not ended ⇒ premiere, or a brand-new unconfirmed live.
+        #   - Already polled with real viewers (last_viewers > 0) ⇒ it's a real live;
+        #     hold the last known value while its viewer count briefly blanks.
+        #   - Otherwise (premiere, or new live with no viewers yet) ⇒ skip ENTIRELY.
+        #     Do NOT record 0 and do NOT add to state — premieres have no live viewers
+        #     and would pollute the ranking/summary/dashboard with fake rows. A real
+        #     live is picked up next tick once concurrentViewers appears.
         if concurrent is None and broadcast == "live" and actual_end is None:
-            concurrent = 0
-            print(f"⚠️ {vid}: new live, concurrentViewers not ready yet — recording 0")
+            last = state.get("streams", {}).get(vid, {}).get("last_viewers")
+            if last and last > 0:
+                concurrent = last
+                print(f"⚠️ {vid}: concurrentViewers missing, holding last known {last}")
+            else:
+                print(f"🎬 {vid}: Premiere (no concurrentViewers) — not a real live. Skipped.")
+                continue
 
         if concurrent is not None:
             ch_info = channel_lookup.get(vid, {"channel_name": "Unknown", "channel_id": ""})
