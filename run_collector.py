@@ -17,8 +17,13 @@ INTERVAL = 300  # 5 min
 def tick():
     print(f"[{datetime.now(ICT).strftime('%Y-%m-%d %H:%M:%S')} ICT] collector tick", flush=True)
     try:
-        import yt_live_daily  # the module's main() runs on import? No — guarded by __main__
-        yt_live_daily.main()
+        # ไฟล์ชื่อ yt-live-daily.py (hyphen) → import เป็น module ปกติไม่ได้ ต้องโหลดผ่าน path
+        import importlib.util
+        here = os.path.dirname(os.path.abspath(__file__))
+        spec = importlib.util.spec_from_file_location("yt_live_daily", os.path.join(here, "yt-live-daily.py"))
+        ym = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ym)
+        ym.main()
     except SystemExit:
         pass
     except Exception:
