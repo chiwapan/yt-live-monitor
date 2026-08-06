@@ -362,6 +362,8 @@ def sheets_append(tab_name, rows):
     """Append rows to a Google Sheets tab via GAPI script."""
     if not rows:
         return
+    if not SHEET_ID:
+        return  # Sheets ไม่ใช้แล้ว — JSONL เป็น database หลัก
 
     values_json = json.dumps(rows)
     col = "F" if tab_name == "Raw" else ("H" if tab_name == "Peak_Viewers" else "I")
@@ -381,6 +383,8 @@ def sheets_append(tab_name, rows):
 
 def sheets_update(tab_name, range_str, values):
     """Update specific cells in Google Sheets."""
+    if not SHEET_ID:
+        return  # Sheets ไม่ใช้แล้ว — JSONL เป็น database หลัก
     values_json = json.dumps(values)
     cmd = [sys.executable, GAPI_SCRIPT, "sheets", "update",
            SHEET_ID, f"{tab_name}!{range_str}", "--values", values_json]

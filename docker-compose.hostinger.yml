@@ -40,6 +40,7 @@ services:
       - LIVE_JSONL=/data/live_data.jsonl
       - STATE_FILE=/data/yt-live-daily-state.json
       - GAPI_SCRIPT=/app/google_api.py
+      - YT_SHEET_ID=   # Sheets ไม่ใช้แล้ว — JSONL เป็น database หลัก
     volumes:
       - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/live_data.jsonl:/data/live_data.jsonl
       - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/yt-live-daily-state.json:/data/yt-live-daily-state.json
