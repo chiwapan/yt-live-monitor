@@ -64,10 +64,10 @@ SLOTS = [
         {"name": "Ch7HD · ข่าวภาคค่ำ", "channel": "Ch7HDNews", "kw": ["ข่าวภาคค่ำ"]},
     ]},
     {"name": "Live Report", "programs": [
-        {"name": "PPTV HD 36 · Live Report", "channel": "PPTV HD 36", "kw": ["ฮลุน"]},
-        {"name": "ThaiRath News · สดไทยรัฐ", "channel": "ThaiRath News", "kw": ["ฮลุน"]},
-        {"name": "ข่าวช่อง8 · สดสด", "channel": "ข่าวช่อง8", "kw": ["ฮลุน"]},
-        {"name": "Amarin TV · สดอมรินทร์", "channel": "Amarin TV", "kw": ["ฮลุน"]},
+        {"name": "PPTV HD 36 · Live Report", "channel": "PPTV HD 36", "kw": ["Live Report"]},
+        {"name": "ThaiRath News · สดไทยรัฐ", "channel": "ThaiRath News", "kw": ["สดไทยรัฐ"]},
+        {"name": "ข่าวช่อง8 · สดสด", "channel": "ข่าวช่อง8", "kw": ["สดสด"]},
+        {"name": "Amarin TV · สดอมรินทร์", "channel": "Amarin TV", "kw": ["สดอมรินทร์"]},
     ]},
     {"name": "รายการ Talk", "programs": [
         {"name": "ThaiRath News · NEWSROOM", "channel": "ThaiRath News", "kw": ["NEWSROOM", "นิวส์รูม"]},
