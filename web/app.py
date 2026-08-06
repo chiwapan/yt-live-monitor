@@ -120,6 +120,7 @@ def api_slot_compare():
                         "peak": 0,
                         "start": dt,
                         "end": dt,
+                        "points": [],
                     }
                 if d.get("viewers", 0) > s["peak"]:
                     s["peak"] = d["viewers"]
@@ -127,6 +128,7 @@ def api_slot_compare():
                     s["start"] = dt
                 if dt > s["end"]:
                     s["end"] = dt
+                s["points"].append((d["ts"], d.get("viewers", 0)))
 
         # PREMIERE FILTER: a premiere never has live concurrentViewers, so its captured
         # rows are all 0 → peak==0. Drop them so premieres never show in slot comparison.
@@ -151,10 +153,11 @@ def api_slot_compare():
                         continue
                 e = days.get(s["date"])
                 if e is None:
-                    days[s["date"]] = {
+                    e = days[s["date"]] = {
                         "peak": s["peak"],
                         "start": s["start"].strftime("%H:%M"),
                         "end": s["end"].strftime("%H:%M"),
+                        "curve": {},
                     }
                 else:
                     e["peak"] = max(e["peak"], s["peak"])
@@ -162,10 +165,17 @@ def api_slot_compare():
                         e["start"] = s["start"].strftime("%H:%M")
                     if s["end"].strftime("%H:%M") > e["end"]:
                         e["end"] = s["end"].strftime("%H:%M")
+                # per-day concurrent curve: sum viewers ของทุก stream ที่ match ตาม HH:MM
+                for tv in s["points"]:
+                    hhmm = tv[0].split(" ")[1][:5]
+                    e["curve"][hhmm] = e["curve"].get(hhmm, 0) + tv[1]
             progs.append({
                 "name": prog["name"],
                 "channel": prog["channel"],
-                "days": days,
+                "kw": prog.get("kw", []),
+                "vids": prog.get("vids", []),
+                "days": {d: {**v, "curve": sorted([[k, c] for k, c in v["curve"].items()])}
+                         for d, v in days.items()},
             })
         result.append({"name": slot["name"], "programs": progs})
 

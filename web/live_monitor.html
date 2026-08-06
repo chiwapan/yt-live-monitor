@@ -319,6 +319,7 @@ let DATE = null;            // null = ยังไม่เลือก (ใช�
 let charts = [];
 let COMPARE_RANGE = 7;      // จำนวนวันที่แสดงในหน้าเปรียบเทียบ; 0 = ทั้งหมด
 let COMPARE_SLOT = 0;       // slot ที่เลือกในหน้าเปรียบเทียบ (index ใน SLOTS)
+let COMPARE_DAY = '';       // วันที่เลือกดูกราฟรายวัน ('' = ไม่เลือก)
 let RANK_FULL = false;      // ตาราง Program Ranking: แสดง 10 อันดับแรกก่อน
 let MINI_FULL = false;      // กราฟแยกรายการ: แสดง 6 อันแรกก่อน
 
@@ -375,7 +376,7 @@ function renderTabs(){
 function go(view){
   const switching = (view==='compare') !== (VIEW==='compare');
   VIEW=view;
-  RANK_FULL=false; MINI_FULL=false;
+  RANK_FULL=false; MINI_FULL=false; COMPARE_DAY='';
   if(switching) load(); else render();
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -641,6 +642,11 @@ function setCompareRange(range){
 }
 function setCompareSlot(i){
   COMPARE_SLOT = i;
+  COMPARE_DAY = '';
+  render();
+}
+function setCompareDay(day){
+  COMPARE_DAY = day || '';
   render();
 }
 async function renderCompare(){
@@ -697,6 +703,24 @@ async function renderCompare(){
   const dates = COMPARE_RANGE ? descDates.slice(0,COMPARE_RANGE) : descDates;
   const chartDates = [...dates].sort();
 
+  // ── เลือกวัน → กราฟ concurrent รายวัน (ใครขึ้นตรงไหน) ──
+  const dayOptions = descDates;
+  if(!COMPARE_DAY || !dayOptions.includes(COMPARE_DAY)) COMPARE_DAY = dayOptions[0] || '';
+  h += `<div class="compare-toolbar" style="margin-top:2px">
+    <span class="range-label">เลือกวัน เพื่อดูกราฟ concurrent รายวันของแต่ละรายการ (ใครขึ้นตรงไหน)</span>
+    <select id="compareDay" onchange="setCompareDay(this.value)" style="font-family:'Noto Sans Thai',sans-serif;font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer">
+      <option value="">-- เลือกวัน --</option>
+      ${dayOptions.map(d=>`<option value="${d}" ${d===COMPARE_DAY?'selected':''}>${slotDateLabel(d)}</option>`).join('')}
+    </select>
+  </div>`;
+
+  if(COMPARE_DAY){
+    h += `<div class="panel">
+      <div class="panel-head"><h2>Concurrent รายวัน — ${slot.name} · ${slotDateLabel(COMPARE_DAY)}</h2><span class="hint">เส้นของแต่ละรายการในวันนั้น · hover ดูค่า</span></div>
+      <div class="chartbox fullpage"><canvas id="dayCompareChart"></canvas></div>
+    </div>`;
+  }
+
   // กราฟขึ้นก่อน แล้วตามด้วยตารางรายละเอียด
   h += `<div class="panel">
     <div class="panel-head"><h2>แนวโน้ม Peak — ${slot.name}</h2></div>
@@ -747,10 +771,66 @@ async function renderCompare(){
       scales:{x:{ticks:{maxTicksLimit:7}},y:{beginAtZero:true,ticks:{callback:v=>fmt(v)},grid:{color:'#eef0f3'}}}
     }
   }));
+
+  if(COMPARE_DAY) renderDayCompare(slot, si);
 }
 function prevDateOf(sortedDescDates, date){
   const i = sortedDescDates.indexOf(date);
   return sortedDescDates[i+1];  // sortedDescDates เรียงล่าสุดก่อน → index+1 = วันก่อนหน้า
+}
+
+/* ── กราฟรายวัน: concurrent curve ของแต่ละรายการใน slot ณ วันที่เลือก ── */
+async function renderDayCompare(slot, si){
+  const canvas = document.getElementById('dayCompareChart');
+  if(!canvas) return;
+  let dayData;
+  try{
+    const r = await fetch('/api/live-data?date='+COMPARE_DAY);
+    dayData = await r.json();
+  }catch(e){
+    return;
+  }
+  const datasets = [];
+  slot.programs.forEach(prog=>{
+    const matches = [];
+    for(const [ch, info] of Object.entries(dayData.channels||{})){
+      if(ch !== prog.channel) continue;
+      for(const s of (info.streams||[])){
+        if(prog.vids && prog.vids.length){
+          if(prog.vids.includes(s.video_id)) matches.push(s);
+        }else if(prog.kw && prog.kw.length){
+          if(prog.kw.some(k=>s.title.includes(k))) matches.push(s);
+        }
+      }
+    }
+    matches.forEach((s,i)=>{
+      datasets.push({
+        label: matches.length>1 ? `${prog.name} (${i+1})` : prog.name,
+        data: s.points.map(p=>({x:toICT(p.ts), y:p.viewers})),
+        borderColor: chColor(prog.channel),
+        backgroundColor: chColor(prog.channel)+'14',
+        borderWidth: 2, pointRadius: 0, tension: .3, fill: false,
+      });
+    });
+  });
+  if(!datasets.length){
+    canvas.parentElement.innerHTML = '<div class="empty">ไม่มีข้อมูลรายการในวันนี้</div>';
+    return;
+  }
+  charts.push(new Chart(canvas,{
+    type:'line',
+    data:{datasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      parsing:false, interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom',labels:{usePointStyle:true,pointStyle:'circle',font:{family:'Noto Sans Thai',size:12}}},
+        tooltip:{callbacks:{title:items=>fmtDayTime(items[0].parsed.x), label:c=>` ${c.dataset.label}: ${fmt(c.parsed.y)} คน`}}},
+      scales:{
+        x:{type:'linear',bounds:'data',ticks:{maxTicksLimit:14,callback:v=>fmtTime(v)}},
+        y:{beginAtZero:true,ticks:{callback:v=>fmt(v)},grid:{color:'#eef0f3'}}
+      }
+    }
+  }));
 }
 
 /* ── Render / load ── */
