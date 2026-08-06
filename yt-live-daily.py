@@ -400,6 +400,8 @@ def sheets_update(tab_name, range_str, values):
 
 def sheets_sort_by_start_time(tab_name, time_col_index=5):
     """Sort tab by Start_Time column (parse datetime, not string sort)."""
+    if not SHEET_ID:
+        return  # Sheets ไม่ใช้แล้ว — JSONL เป็น database หลัก
     range_str = f"{tab_name}!A:H"
     cmd = [sys.executable, GAPI_SCRIPT, "sheets", "get", SHEET_ID, range_str]
     try:
@@ -444,6 +446,8 @@ def sheets_sort_by_start_time(tab_name, time_col_index=5):
 
 def setup_sheet_tabs():
     """Ensure tabs exist with headers."""
+    if not SHEET_ID:
+        return  # Sheets ไม่ใช้แล้ว — JSONL เป็น database หลัก
     sheets_update("Raw", "A1:F1",
                   [["Timestamp", "Video_ID", "Title", "Concurrent_Viewers", "Channel", "URL"]])
     sheets_update("Daily_Summary", "A1:I1",
@@ -482,9 +486,8 @@ def main():
     if not API_KEY:
         print("⚠️ YOUTUBE_API_KEY not set")
         sys.exit(1)
-    if not SHEET_ID:
-        print("⚠️ YT_SHEET_ID not set")
-        sys.exit(1)
+    # SHEET_ID ไม่บังคับแล้ว — ถ้าไม่ตั้ง = ไม่ export Sheets (JSONL เป็น database หลัก)
+    # sheets_append/update มี guard ข้ามเองอยู่แล้ว
 
     now = floor_5min(datetime.now(ICT))
     print(f"🔍 YT Live Monitor — {now.strftime('%Y-%m-%d %H:%M:%S')} ICT")
