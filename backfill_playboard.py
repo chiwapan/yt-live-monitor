@@ -102,7 +102,7 @@ def load_existing():
                 pass
     return existing
 
-def ingest(path, existing, fallback_title=None, no_api=False):
+def ingest(path, existing, fallback_title=None, no_api=False, day_override=None):
     parsed = parse_html(path)
     if not parsed:
         print(f"SKIP {os.path.basename(path)} — ไม่เจอ Playboard chart/table")
@@ -124,7 +124,10 @@ def ingest(path, existing, fallback_title=None, no_api=False):
     need_date = any(len(ts) <= 5 for ts, _ in data)
     day = None
     if need_date:
-        if start:
+        if day_override:
+            # บังคับวันที่ (กรณี video ID ถูก reuse หลาย session — API ชี้ session ล่าสุด)
+            day = day_override
+        elif start:
             # actualStartTime is UTC; chart is ICT (+7)
             from datetime import datetime, timedelta
             dt = datetime.strptime(start, "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=7)
@@ -268,6 +271,11 @@ def main():
     args = [a for a in args if a != "--no-filter"]
     no_api = "--no-api" in args
     args = [a for a in args if a != "--no-api"]
+    day_override = None
+    if "--date" in args:
+        i = args.index("--date")
+        day_override = args[i + 1]
+        del args[i:i + 2]
     files = []
     if "--scan-dir" in args:
         d = args[args.index("--scan-dir") + 1] if len(args) > args.index("--scan-dir") + 1 else "/opt/data/cache/documents"
@@ -278,7 +286,7 @@ def main():
     if not files:
         print(__doc__); sys.exit(1)
     existing = load_existing()
-    total = sum(ingest(p, existing, fallback, no_api) for p in files)
+    total = sum(ingest(p, existing, fallback, no_api, day_override) for p in files)
     print(f"\nรวม: +{total} rows")
     if do_filter:
         filter_prelive()
