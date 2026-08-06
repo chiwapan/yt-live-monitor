@@ -321,7 +321,6 @@ let COMPARE_RANGE = 7;      // จำนวนวันที่แสดงใ�
 let COMPARE_SLOT = 0;       // slot ที่เลือกในหน้าเปรียบเทียบ (index ใน SLOTS)
 let RANK_FULL = false;      // ตาราง Program Ranking: แสดง 10 อันดับแรกก่อน
 let MINI_FULL = false;      // กราฟแยกรายการ: แสดง 6 อันแรกก่อน
-let TOPLIVE_FULL = false;   // Top Live (หน้าแรก): แสดง 10 อันดับแรกก่อน
 
 function fmt(n){ return (n||0).toLocaleString('th-TH'); }
 function chColor(ch){ return CH_COLORS[ch] || '#64748b'; }
@@ -376,7 +375,7 @@ function renderTabs(){
 function go(view){
   const switching = (view==='compare') !== (VIEW==='compare');
   VIEW=view;
-  RANK_FULL=false; MINI_FULL=false; TOPLIVE_FULL=false;
+  RANK_FULL=false; MINI_FULL=false;
   if(switching) load(); else render();
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -423,25 +422,23 @@ function renderOverview(){
     <div class="stat blue"><div class="lbl">Peak วันนี้ · ${dateLbl}</div><div class="val num">${topStream?fmt(topStream.peak):'-'}</div><div class="sub">${topStream?shortTitle(topStream.title,42)+' · '+topCh:'-'}</div></div>
   </div>`;
 
-  // 2) Concurrent ตอนนี้ แยกตามช่อง — เฉพาะช่องที่กำลัง live
-  const chNow = chs.map(ch=>{
-    const info = DATA.channels[ch];
-    const live = info.streams.filter(s=>s.is_live);
-    return {ch, cur: live.reduce((sum,s)=>sum+(s.points[s.points.length-1].viewers||0),0), n: live.length};
-  }).filter(x=>x.n>0).sort((a,b)=>b.cur-a.cur);
-  h += `<div class="sechead">Concurrent ตอนนี้ แยกตามช่อง</div>
+  // 2) Concurrent ตอนนี้ — รายการ live (ชื่อรายการ + ช่อง + ผู้ชมตอนนี้ + peak)
+  const liveSorted = [...liveStreams].sort((a,b)=>(b.points[b.points.length-1].viewers||0)-(a.points[a.points.length-1].viewers||0));
+  h += `<div class="sechead">Concurrent ตอนนี้</div>
   <div class="panel tablepanel">
   <table><thead><tr>
-    <th>ช่อง</th><th>LIVE</th><th>ผู้ชมตอนนี้</th>
+    <th>รายการ (Live)</th><th>ช่อง</th><th>ผู้ชมตอนนี้</th><th>Peak</th>
   </tr></thead><tbody>`;
-  if(!chNow.length){
-    h += `<tr><td colspan="3"><div class="empty" style="padding:20px 0">ไม่มีช่อง live ในขณะนี้</div></td></tr>`;
+  if(!liveSorted.length){
+    h += `<tr><td colspan="4"><div class="empty" style="padding:20px 0">ไม่มีรายการ live ในขณะนี้</div></td></tr>`;
   }
-  chNow.forEach(x=>{
+  liveSorted.forEach(s=>{
+    const cur = s.points[s.points.length-1].viewers||0;
     h += `<tr>
-      <td data-label="ช่อง"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${chColor(x.ch)};display:inline-block;"></span>${x.ch}</span></td>
-      <td data-label="LIVE"><span class="chip live num">${x.n} LIVE</span></td>
-      <td class="peakcell" data-label="ผู้ชมตอนนี้" style="color:var(--red)">${fmt(x.cur)}</td>
+      <td class="t-title" data-label="รายการ (Live)"><a class="tlink" href="${s.url}" target="_blank">${s.title}</a></td>
+      <td data-label="ช่อง"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${chColor(s.ch)};display:inline-block;"></span>${s.ch}</span></td>
+      <td class="peakcell" data-label="ผู้ชมตอนนี้" style="color:var(--red)">${fmt(cur)}</td>
+      <td class="peakcell" data-label="Peak" style="color:${chColor(s.ch)}">${fmt(s.peak)}</td>
     </tr>`;
   });
   h += `</tbody></table></div>`;
@@ -464,32 +461,6 @@ function renderOverview(){
       <span class="go">→</span>
     </div>`;
   }
-  h += `</div>`;
-
-  // 5) Top Live ตอนนี้ (อยู่ล่างสุด) — เรียงตาม concurrent ตอนนี้, แสดง peak ด้วย
-  const liveSorted = [...liveStreams].sort((a,b)=>(b.points[b.points.length-1].viewers||0)-(a.points[a.points.length-1].viewers||0));
-  h += `<div class="sechead">Top Live ตอนนี้</div>
-  <div class="panel tablepanel">
-  <table><thead><tr>
-    <th>#</th><th>รายการ</th><th>ช่อง</th><th>ดูตอนนี้</th><th>Peak</th><th>Peak เมื่อ</th>
-  </tr></thead><tbody>`;
-  if(!liveSorted.length){
-    h += `<tr><td colspan="6"><div class="empty" style="padding:24px 0">ไม่มีรายการ live ในขณะนี้</div></td></tr>`;
-  }
-  const liveShown = TOPLIVE_FULL ? liveSorted : liveSorted.slice(0,10);
-  liveShown.forEach((s,i)=>{
-    const cur = s.points[s.points.length-1].viewers||0;
-    h += `<tr>
-      <td class="num" data-label="#" style="font-weight:700;color:${i<3?'var(--red)':'var(--muted)'}">${i+1}</td>
-      <td class="t-title" data-label="รายการ"><a class="tlink" href="${s.url}" target="_blank">${shortTitle(s.title,62)}</a></td>
-      <td data-label="ช่อง"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${chColor(s.ch)};display:inline-block;"></span>${s.ch}</span></td>
-      <td class="peakcell" data-label="ดูตอนนี้" style="color:var(--red)">${fmt(cur)}</td>
-      <td class="peakcell" data-label="Peak" style="color:${chColor(s.ch)}">${fmt(s.peak)}</td>
-      <td class="num" data-label="Peak เมื่อ" style="white-space:nowrap;color:var(--muted)">${fmtTsTime(s.peak_ts)}</td>
-    </tr>`;
-  });
-  h += `</tbody></table>`;
-  if(!TOPLIVE_FULL && liveSorted.length > 10) h += `<button class="morebtn" onclick="TOPLIVE_FULL=true;render()">แสดงทั้งหมด ${liveSorted.length} รายการ ↓</button>`;
   h += `</div>`;
 
   document.getElementById('content').innerHTML = h;
