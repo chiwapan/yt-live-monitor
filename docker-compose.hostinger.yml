@@ -1,11 +1,12 @@
 # yt-live-monitor — แยกจาก Hermes อย่างสมบูรณ์
-# UI-friendly: ใช้ absolute path ชี้ไปที่ repo บน host (/opt/data คือ host mount)
-# .env อยู่ที่ /opt/data/projects/yt-live-monitor/.env (สร้างไว้แล้ว = .env.compose)
+# UI-friendly: ใช้ absolute path ชี้ไปที่ repo บน HOST จริง
+# (บน host: /docker/hermes-agent-r6gh/data = bind mount ของ /opt/data ใน Hermes sandbox)
+# .env อยู่ที่ <repo>/.env
 
 services:
   web:
     build:
-      context: /opt/data/projects/yt-live-monitor
+      context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
       dockerfile: Dockerfile
     container_name: yt-live-monitor-web
     restart: unless-stopped
@@ -14,8 +15,12 @@ services:
     environment:
       - PORT=8899
       - LIVE_JSONL=/data/live_data.jsonl
+      - VIEWS_JSONL=/data/views_data.jsonl
+      - VIEWS_LIVE_JSONL=/data/views_live.jsonl
     volumes:
-      - yt_live_data:/data
+      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/live_data.jsonl:/data/live_data.jsonl
+      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_data.jsonl:/data/views_data.jsonl
+      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_live.jsonl:/data/views_live.jsonl
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8899/api/ping',timeout=4)"]
       interval: 60s
@@ -24,19 +29,20 @@ services:
 
   collector:
     build:
-      context: /opt/data/projects/yt-live-monitor
+      context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
       dockerfile: Dockerfile.collector
     container_name: yt-live-monitor-collector
     restart: unless-stopped
     env_file:
-      - /opt/data/projects/yt-live-monitor/.env
+      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
     environment:
       - TZ=Asia/Bangkok
       - LIVE_JSONL=/data/live_data.jsonl
       - STATE_FILE=/data/yt-live-daily-state.json
       - GAPI_SCRIPT=/app/google_api.py
     volumes:
-      - yt_live_data:/data
+      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/live_data.jsonl:/data/live_data.jsonl
+      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/yt-live-daily-state.json:/data/yt-live-daily-state.json
 
   # Cloudflare tunnel — serve live.chiwapan.online -> localhost:8899
   # network_mode: host เห็น localhost:8899 ที่ web publish (เหมือน config เดิมใน Hermes)
@@ -47,10 +53,7 @@ services:
     restart: unless-stopped
     network_mode: host
     env_file:
-      - /opt/data/projects/yt-live-monitor/.env
+      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
     command: ["sh", "-c", "cloudflared tunnel run --token \"$CF_TUNNEL_TOKEN\""]
     depends_on:
       - web
-
-volumes:
-  yt_live_data:

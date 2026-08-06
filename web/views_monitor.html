@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YT Views Monitor — Live</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+:root{
+  --bg:#f4f5f7;--card:#fff;--ink:#101418;--muted:#6b7280;--line:#e4e6ea;
+  --blue:#1d4ed8;--violet:#7c3aed;--red:#dc2626;--green:#16a34a;--amber:#d97706;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Noto Sans Thai',sans-serif;background:var(--bg);
+  background-image:radial-gradient(#d8dbe1 1px,transparent 1px);background-size:22px 22px;color:var(--ink);min-height:100vh;}
+.num{font-family:'Space Grotesk','Noto Sans Thai',sans-serif;font-variant-numeric:tabular-nums;}
+.wrap{max-width:1400px;margin:0 auto;padding:18px 20px 28px;}
+
+.topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.brand{display:flex;align-items:center;gap:12px;}
+.brand .dot{width:14px;height:14px;border-radius:4px;background:var(--blue);}
+.brand h1{font-family:'Space Grotesk','Noto Sans Thai',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.5px;}
+.brand h1 span{color:var(--blue);}
+.brand .sub{font-size:12.5px;color:var(--muted);font-weight:500;}
+.nav{display:flex;gap:8px;}
+.nav a{font-size:13px;font-weight:600;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--muted);text-decoration:none;}
+.nav a.on{background:var(--blue);color:#fff;border-color:var(--blue);}
+.daterange{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.daterange label{font-size:12px;color:var(--muted);font-weight:600;}
+.daterange input[type=date]{padding:7px 9px;border:1px solid var(--line);border-radius:9px;font-family:'Space Grotesk',sans-serif;font-size:13px;background:#fff;}
+.btn{background:var(--blue);color:#fff;border:none;padding:7px 15px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans Thai',sans-serif;}
+.btn.ghost{background:#fff;color:var(--muted);border:1px solid var(--line);}
+
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+.seg button{border:none;background:#fff;padding:7px 15px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;font-family:'Noto Sans Thai',sans-serif;}
+.seg button.on{background:var(--ink);color:#fff;}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 15px;}
+.kpi .lab{font-size:12.5px;color:var(--muted);font-weight:500;}
+.kpi .val{font-size:24px;font-weight:700;margin-top:5px;}
+.kpi .val.sm{font-size:16px;}
+.kpi .sub{font-size:11.5px;color:var(--muted);margin-top:3px;}
+
+.grid2{display:grid;grid-template-columns:1.45fr .55fr;gap:14px;margin-bottom:14px;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;}
+.card h3{font-size:14.5px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.card h3 .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#f1f5f9;color:var(--muted);}
+
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;font-size:11.5px;color:var(--muted);font-weight:600;padding:7px 9px;border-bottom:1px solid var(--line);}
+td{padding:8px 9px;border-bottom:1px solid #f1f3f6;vertical-align:middle;}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:'Space Grotesk',sans-serif;}
+tr:last-child td{border-bottom:none;}
+tr.click{cursor:pointer;}
+tr.click:hover{background:#f8fafc;}
+.rank{display:inline-flex;width:22px;height:22px;border-radius:6px;background:#f1f5f9;color:var(--muted);font-size:11.5px;font-weight:700;align-items:center;justify-content:center;}
+.rank.top{background:var(--amber);color:#fff;}
+.vtitle{max-width:330px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.chip-ch{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;color:#fff;white-space:nowrap;}
+.chip-core{background:#eff6ff;color:var(--blue);font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:20px;}
+.chip-short{background:#f5f3ff;color:var(--violet);font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:20px;}
+.delta{font-size:12px;font-weight:700;}
+.delta.up{color:var(--green);}
+.delta.down{color:var(--red);}
+
+.loadmore{width:100%;margin-top:10px;padding:9px;border:1px dashed var(--line);background:#fafbfc;color:var(--muted);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans Thai',sans-serif;}
+.loadmore:hover{background:#f1f5f9;color:var(--ink);}
+
+.strip{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;}
+.c1{background:#fafbfc;border:1px solid var(--line);border-radius:11px;padding:9px 10px;display:flex;flex-direction:column;gap:3px;min-width:0;}
+.c1 .nm{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.c1 .v{font-size:15px;font-weight:700;font-family:'Space Grotesk',sans-serif;}
+.c1 .t{font-size:10.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.c1 .ty{font-size:9.5px;font-weight:700;}
+
+.angles{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
+.angle{font-size:12px;font-weight:600;padding:6px 12px;border:1px solid var(--line);border-radius:20px;background:#fff;color:var(--muted);cursor:pointer;font-family:'Noto Sans Thai',sans-serif;}
+.angle.on{background:var(--violet);color:#fff;border-color:var(--violet);}
+
+.foot{margin-top:16px;font-size:12px;color:var(--muted);text-align:center;}
+.livebadge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--green);background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 10px;border-radius:20px;}
+.livebadge .d{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 1.2s infinite;}
+@keyframes blink{50%{opacity:.25;}}
+#loading{text-align:center;color:var(--muted);padding:40px;font-size:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="dot"></div>
+      <div>
+        <h1>YT <span>Views</span> Monitor</h1>
+        <div class="sub">ยอดวิวแยก Video / Short — ทุกช่องเทียบกันได้</div>
+      </div>
+    </div>
+    <div class="nav">
+      <a href="/live-monitor">Live Concurrent</a>
+      <a href="/views-monitor" class="on">Views Monitor</a>
+    </div>
+  </div>
+
+  <div class="cardhead" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span style="font-size:13px;font-weight:600;color:var(--muted);">แหล่งข้อมูล:</span>
+      <div class="seg" id="srcSeg">
+        <button class="on" data-s="live">สด (ทุกชม.)</button>
+        <button data-s="batch">รายวัน (Analytics)</button>
+      </div>
+      <span class="livebadge" id="liveBadge"><span class="d"></span> <span id="liveTs">—</span></span>
+    </div>
+    <div class="daterange" id="dateRange" style="display:none;">
+      <label>จาก</label><input type="date" id="dFrom">
+      <label>ถึง</label><input type="date" id="dTo">
+      <button class="btn" onclick="applyDate()">ดู</button>
+    </div>
+  </div>
+
+  <div id="loading">⏳ กำลังโหลดข้อมูลยอดวิว…</div>
+
+  <div id="app" style="display:none;">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grid2">
+      <div class="card">
+        <div class="cardhead" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <h3 style="margin:0;">อันดับยอดวิว <span class="tag" id="lbCount">—</span></h3>
+          <div class="seg" id="filterSeg">
+            <button class="on" data-f="all">ทั้งหมด</button>
+            <button data-f="video">Video</button>
+            <button data-f="short">Short</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>#</th><th>ช่อง</th><th>หัวข้อข่าว / คลิป</th><th>ประเภท</th><th class="num">ยอดวิว</th><th class="num" id="deltaHead">Δ วันก่อน</th></tr></thead>
+          <tbody id="lbBody"></tbody>
+        </table>
+        <button class="loadmore" id="loadMore">โหลดอันดับเพิ่มเติม ▾</button>
+      </div>
+
+      <div class="card">
+        <div class="cardhead">
+          <h3 style="margin:0;">มุมวิเคราะห์ <span class="tag">คลิกสลับ</span></h3>
+        </div>
+        <div class="angles" id="angleSeg">
+          <button class="angle on" data-a="split">CORE vs SHORTS</button>
+          <button class="angle" data-a="share">Network Share</button>
+          <button class="angle" data-a="momentum">Momentum</button>
+        </div>
+        <div style="height:8px;"></div>
+        <canvas id="ch" height="280"></canvas>
+        <div class="foot" id="chartNote" style="margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="cardhead">
+        <h3 style="margin:0;">อันดับ 1 ของแต่ละช่อง <span class="tag">ได้วิวจากข่าวอะไร</span></h3>
+        <span style="font-size:11.5px;color:var(--muted);">อิงตามตัวกรองด้านบน</span>
+      </div>
+      <div class="strip" id="strip"></div>
+    </div>
+  </div>
+
+  <div class="foot">YT Views Monitor — อ่านจาก views_data.jsonl (รายวัน) + views_live.jsonl (สด) · โหมดสดอัปเดตทุกชั่วโมง</div>
+</div>
+
+<script>
+window.onerror=function(m,s,l,c,err){console.log('ERR:'+(err&&err.stack||m));document.getElementById('loading').textContent='JS Error: '+(err&&err.stack||m);};
+const CH = {
+  news:   {name:'ThaiRath News',  color:'#1d4ed8', short:'News'},
+  variety:{name:'Variety',        color:'#7c3aed', short:'Var'},
+  ch8:    {name:'ข่าวช่อง8',        color:'#dc2626', short:'CH8'},
+  amarin: {name:'Amarin TV',      color:'#0891b2', short:'Amarin'},
+  hon:    {name:'โหนกระแส',        color:'#16a34a', short:'Hon'},
+  rueang: {name:'เรื่องเล่าเช้านี้', color:'#d97706', short:'Rueang'},
+  krob:   {name:'ครอบครัวข่าว3',    color:'#db2777', short:'Krob'}
+};
+const fmt = n => n>=1e6 ? (n/1e6).toFixed(2)+'M' : n>=1e3 ? (n/1e3).toFixed(0)+'K' : ''+Math.round(n);
+const pct = (a,b) => b? ((a-b)/b*100) : 0;
+
+let RAW = {batch:[], live:[], last_live:'', last_batch:''};
+let state = { src:'live', filter:'all', angle:'split', page:1, pageSize:10, dFrom:null, dTo:null };
+
+function loadData(){
+  fetch('/api/views-data').then(r=>r.json()).then(d=>{
+    RAW = d;
+    document.getElementById('loading').style.display='none';
+    document.getElementById('app').style.display='block';
+    document.getElementById('liveTs').textContent = d.last_live ? 'อัปเดต '+d.last_live+' ICT' : 'ยังไม่มี snapshot';
+    // ensure DOM ready + RAW set ก่อน render
+    setTimeout(renderAll, 0);
+  }).catch(e=>{
+    document.getElementById('loading').textContent = '⚠️ โหลดข้อมูลไม่ได้: '+(e&&e.message?e.message:e);
+  });
+}
+
+// ── สร้าง dataset จาก src ปัจจุบัน ──
+function buildRows(){
+  if(state.src==='live'){
+    // snapshot: แต่ละแถว = video สด ของช่องนั้น (view_count สะสม)
+    // หา "อันดับ 1 ปัจจุบัน" ต่อช่อง = video แรกในลิสต์ (เรียงจากใหม่สุด)
+    const byCh = {};
+    RAW.live.forEach(r=>{
+      if(!(r.channel_id in byCh)) byCh[r.channel_id]=[];
+      byCh[r.channel_id].push(r);
+    });
+    const rows=[];
+    Object.keys(byCh).forEach(cid=>{
+      // snapshot ไม่มีวันก่อน → ไม่มี delta
+      byCh[cid].forEach(r=> rows.push({
+        ch: cid, t:r.title, type: r.is_short_est?'short':'video',
+        v: r.view_count, pv:null, _live:true
+      }));
+    });
+    return rows;
+  } else {
+    // batch รายวัน: เอาวันล่าสุด (หรือ range) จาก per-video rows
+    let rows = RAW.batch.filter(r=> r.video_id); // per-video only
+    if(state.dFrom) rows = rows.filter(r=> r.date>=state.dFrom);
+    if(state.dTo) rows = rows.filter(r=> r.date<=state.dTo);
+    if(!rows.length) rows = RAW.batch.filter(r=> r.video_id);
+    // วันล่าสุดในชุด
+    const dates = [...new Set(rows.map(r=>r.date))].sort();
+    const latest = dates[dates.length-1];
+    rows = rows.filter(r=> r.date===latest);
+    // delta vs วันก่อน (ถ้ามี)
+    const prev = dates.length>1 ? dates[dates.length-2] : null;
+    const prevMap = {};
+    RAW.batch.filter(r=>r.video_id && r.date===prev).forEach(r=> prevMap[r.video_id]=r.views);
+    return rows.map(r=>({
+      ch:r.channel_id, t:r.title||'(ไม่ระบุชื่อ)', type: r.product==='SHORTS'?'short':'video',
+      v:r.views, pv: prevMap[r.video_id] ?? null, _live:false
+    }));
+  }
+}
+
+function filtered(rows){
+  if(state.filter==='all') return rows;
+  return rows.filter(r=>r.type===state.filter);
+}
+function sorted(rows){ return rows.slice().sort((a,b)=>b.v-a.v); }
+
+function renderKPI(rows){
+  const f = filtered(rows);
+  const total = f.reduce((s,d)=>s+d.v,0);
+  const shorts = f.filter(d=>d.type==='short').reduce((s,d)=>s+d.v,0);
+  const share = total? (shorts/total*100).toFixed(1)+'%':'—';
+  const byCh={}; f.forEach(d=>byCh[d.ch]=(byCh[d.ch]||0)+d.v);
+  const champ = Object.entries(byCh).sort((a,b)=>b[1]-a[1])[0];
+  const top = sorted(f)[0];
+  const champName = champ ? (CH[champ[0]] ? CH[champ[0]].name : '—') : '—';
+  const champColor = champ && CH[champ[0]] ? CH[champ[0]].color : 'var(--ink)';
+  const champV = champ ? champ[1] : 0;
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><div class="lab">ยอดวิวรวม (${state.src==='live'?'สด':'รายวัน'})</div><div class="val num">${fmt(total)}</div><div class="sub">Short ${fmt(shorts)} · Video ${fmt(total-shorts)}</div></div>
+    <div class="kpi"><div class="lab">ช่องแชมป์</div><div class="val num sm" style="color:${champColor}">${champName}</div><div class="sub">${champ?fmt(champV)+' วิว':'—'}</div></div>
+    <div class="kpi"><div class="lab">${state.src==='live'?'วิวสดสูงสุด':'วิดีโอวิวสูงสุด'}</div><div class="val num sm">${top?fmt(top.v):'—'}</div><div class="sub">${top?CH[top.ch].name:'—'}</div></div>
+    <div class="kpi"><div class="lab">Short share</div><div class="val num">${share}</div><div class="sub">สัดส่วนวิวจาก Short</div></div>`;
+}
+
+function renderLeaderboard(rows){
+  const all = sorted(filtered(rows));
+  const shown = all.slice(0, state.page*state.pageSize);
+  const body = document.getElementById('lbBody');
+  body.innerHTML='';
+  shown.forEach((d,i)=>{
+    const dp = d.pv!=null ? pct(d.v,d.pv) : null;
+    const dcls = dp>=0?'up':'down'; const dsign = dp>=0?'▲':'▼';
+    const tr = document.createElement('tr'); tr.className='click';
+    tr.innerHTML = `<td><span class="rank ${i<3?'top':''}">${i+1}</span></td>
+      <td><span class="chip-ch" style="background:${CH[d.ch].color}">${CH[d.ch].name}</span></td>
+      <td class="vtitle" title="${d.t}">${d.t}</td>
+      <td>${d.type==='short'?'<span class="chip-short">SHORT</span>':'<span class="chip-core">VIDEO</span>'}</td>
+      <td class="num">${fmt(d.v)}</td>
+      <td class="num">${dp==null?'<span style="color:var(--muted)">—</span>':`<span class="delta ${dcls}">${dsign} ${Math.abs(dp).toFixed(1)}%</span>`}</td>`;
+    body.appendChild(tr);
+  });
+  document.getElementById('lbCount').textContent = `${shown.length}/${all.length} รายการ`;
+  document.getElementById('deltaHead').textContent = state.src==='live' ? 'สด' : 'Δ วันก่อน';
+  const btn = document.getElementById('loadMore');
+  if(shown.length>=all.length){ btn.style.display='none'; }
+  else { btn.style.display='block'; btn.textContent = `โหลดอันดับเพิ่มเติม ▾ (เหลือ ${all.length-shown.length})`; }
+}
+
+function renderStrip(rows){
+  const strip = document.getElementById('strip'); strip.innerHTML='';
+  const f = filtered(rows);
+  Object.keys(CH).forEach(key=>{
+    const top = sorted(f.filter(d=>d.ch===key))[0];
+    const div=document.createElement('div'); div.className='c1';
+    if(top){
+      const dp = top.pv!=null?pct(top.v,top.pv):null;
+      div.innerHTML = `<div class="nm" style="color:${CH[key].color}">${CH[key].name}</div>
+        <div class="v num">${fmt(top.v)}</div>
+        <div class="t" title="${top.t}">${top.t}</div>
+        <div class="ty" style="color:${top.type==='short'?'var(--violet)':'var(--blue)'}">${top.type==='short'?'SHORT':'VIDEO'}${dp==null?'':' · '+(dp>=0?'▲':'▼')+Math.abs(dp).toFixed(0)+'%'}</div>`;
+    } else { div.innerHTML=`<div class="nm" style="color:var(--muted)">${CH[key].name}</div><div class="t">—</div>`; }
+    strip.appendChild(div);
+  });
+}
+
+let chart;
+function renderChart(rows){
+  const labels=Object.keys(CH); const names=labels.map(k=>CH[k].short); const colors=labels.map(k=>CH[k].color);
+  const f=filtered(rows);
+  let ds,note='';
+  if(state.angle==='split'){
+    const core=[],short=[];
+    labels.forEach(k=>{const x=f.filter(d=>d.ch===k);core.push(x.filter(d=>d.type==='video').reduce((s,d)=>s+d.v,0));short.push(x.filter(d=>d.type==='short').reduce((s,d)=>s+d.v,0));});
+    ds=[{label:'Video (CORE)',data:core,backgroundColor:'#1d4ed8',borderRadius:4},{label:'Short (SHORTS)',data:short,backgroundColor:'#7c3aed',borderRadius:4}];
+    note='แยกสัดส่วน Video/Short รายช่อง';
+  } else if(state.angle==='share'){
+    const grand=f.reduce((s,d)=>s+d.v,0)||1;
+    const tot=labels.map(k=>f.filter(d=>d.ch===k).reduce((s,d)=>s+d.v,0)/grand*100);
+    ds=[{label:'Network Share %',data:tot,backgroundColor:colors,borderRadius:4}];
+    note='สัดส่วนวิวของแต่ละช่องเทียบเครือ (ใครครองตลาด)';
+  } else {
+    const mom=labels.map(k=>{const x=f.filter(d=>d.ch===k);const v=x.reduce((s,d)=>s+d.v,0);const pv=x.reduce((s,d)=>s+(d.pv||0),0);return pv?+((v-pv)/pv*100).toFixed(1):0;});
+    ds=[{label:'Δ% vs วันก่อน',data:mom,backgroundColor:mom.map(m=>m>=0?'#16a34a':'#dc2626'),borderRadius:4}];
+    note='การเติบโตเทียบวันก่อน — เขียว=ขึ้น แดง=ลง';
+  }
+  const stacked=state.angle==='split';
+  if(chart) chart.destroy();
+  chart=new Chart(document.getElementById('ch'),{type:'bar',data:{labels:names,datasets:ds},options:{
+    responsive:true, indexAxis:state.angle==='share'?'y':'x',
+    scales:stacked?{x:{stacked:true,grid:{display:false},ticks:{font:{family:'Noto Sans Thai'}}},y:{stacked:true,grid:{color:'#eef1f5'},ticks:{callback:v=>v>=1e6?(v/1e6)+'M':v>=1e3?(v/1e3)+'K':v,font:{family:'Space Grotesk'}}}}
+      :{x:{stacked:false,grid:{display:false},ticks:{font:{family:'Noto Sans Thai'}}},y:{stacked:false,grid:{color:'#eef1f5'},ticks:{font:{family:'Space Grotesk'},callback:v=>state.angle==='share'?v+'%':(v>=1e6?(v/1e6)+'M':v>=1e3?(v/1e3)+'K':v)}}},
+    plugins:{legend:{display:state.angle==='split',labels:{font:{family:'Noto Sans Thai'}}}}
+  }});
+  document.getElementById('chartNote').textContent=note;
+}
+
+function renderAll(){
+  const rows=buildRows();
+  renderKPI(rows); renderLeaderboard(rows); renderStrip(rows); renderChart(rows);
+}
+
+// ── events ──
+document.getElementById('srcSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  state.src=b.dataset.s; state.page=1;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('dateRange').style.display = state.src==='batch'?'flex':'none';
+  renderAll();
+});
+document.getElementById('filterSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  state.filter=b.dataset.f; state.page=1;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+  renderAll();
+});
+document.getElementById('angleSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  state.angle=b.dataset.a;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+  renderChart(buildRows());
+});
+document.getElementById('loadMore').addEventListener('click',()=>{state.page++;renderLeaderboard(buildRows());});
+function applyDate(){
+  state.dFrom=document.getElementById('dFrom').value||null;
+  state.dTo=document.getElementById('dTo').value||null;
+  state.page=1; renderAll();
+}
+
+loadData();
+// รีเฟรชอัตโนมัติทุก 5 นาที (สด)
+setInterval(()=>{ if(state.src==='live') loadData(); }, 300000);
+</script>
+</body>
+</html>

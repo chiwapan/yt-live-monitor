@@ -26,6 +26,14 @@ LIVE_JSONL = os.environ.get(
     "LIVE_JSONL",
     os.path.join(HERE, "..", "live_data.jsonl"),
 )
+VIEWS_JSONL = os.environ.get(
+    "VIEWS_JSONL",
+    os.path.join(HERE, "..", "views_data.jsonl"),
+)
+VIEWS_LIVE_JSONL = os.environ.get(
+    "VIEWS_LIVE_JSONL",
+    os.path.join(HERE, "..", "views_live.jsonl"),
+)
 
 
 @app.route("/api/ping")
@@ -308,6 +316,48 @@ def live_monitor():
             return f.read(), 200, {"Content-Type": "text/html; charset=utf-8"}
     except Exception as e:
         return f"Dashboard error: {e}", 500
+
+
+@app.route("/views-monitor")
+def views_monitor():
+    try:
+        with open(os.path.join(HERE, "views_monitor.html")) as f:
+            return f.read(), 200, {"Content-Type": "text/html; charset=utf-8"}
+    except Exception as e:
+        return f"Dashboard error: {e}", 500
+
+
+@app.route("/api/views-data")
+def api_views_data():
+    """อ่าน views_data.jsonl (batch รายวัน) + views_live.jsonl (snapshot สด)
+    คืน JSON ให้หน้า views-monitor aggregate ฝั่ง JS"""
+    def read_jsonl(path):
+        if not os.path.exists(path):
+            return []
+        out = []
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    out.append(json.loads(line))
+                except Exception:
+                    continue
+        return out
+
+    batch = read_jsonl(VIEWS_JSONL)
+    live = read_jsonl(VIEWS_LIVE_JSONL)
+    # เวลาของ snapshot ล่าสุด
+    last_live = live[-1]["ts"] if live else ""
+    last_batch = batch[-1]["date"] if batch else ""
+    return jsonify({
+        "batch": batch,          # channel-level + per-video (มี date, product)
+        "live": live,            # snapshot สด (ts, video_id, view_count, is_short_est)
+        "last_live": last_live,
+        "last_batch": last_batch,
+        "channels": [c["name"] for c in CHANNELS] if False else None,
+    })
 
 
 @app.route("/")
