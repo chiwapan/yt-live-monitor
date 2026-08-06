@@ -18,6 +18,7 @@
   --blue: #1d4ed8;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
+html, body { overflow-x:hidden; }
 body {
   font-family: 'Noto Sans Thai', sans-serif;
   background: var(--bg);
@@ -136,15 +137,17 @@ select#dateSel:hover { border-color: #b9bec7; }
 .compare-summary .stat { padding:12px 14px; }
 .compare-summary .stat .val { font-size:22px; }
 .compare-summary .stat .sub { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.compare-table th.program-head { white-space:normal; min-width:180px; }
+.compare-table th.program-head { white-space:normal; min-width:140px; }
 .compare-table th.program-head small { display:block; margin-top:3px; font-size:10px; font-weight:400; color:var(--muted); text-transform:none; letter-spacing:0; }
-.compare-table td { min-width:150px; }
+.compare-table td { min-width:120px; }
 .compare-panels { display:grid; gap:18px; }
 @media (max-width: 720px) {
   .compare-toolbar { align-items:flex-start; }
+  .compare-toolbar .range-label { flex:1 1 100%; line-height:1.45; }
   .range-buttons { width:100%; }
   .range-buttons button { flex:1; }
-  .compare-summary { grid-template-columns:repeat(2,1fr); }
+  .compare-summary { grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); }
+  .compare-summary .stat .sub { white-space:normal; word-break:break-word; }
   .compare-summary .stat .val { font-size:18px; }
   .panel { padding:14px; }
   .panel-head .hint { width:100%; font-size:11px; line-height:1.5; }
@@ -177,6 +180,19 @@ body.chview .wrap { max-width: 100%; padding-left: 28px; padding-right: 28px; }
 .chcard .row .v { font-weight:600; }
 .chcard .go { font-size:11px; color:var(--blue); font-weight:600; margin-top:6px; }
 
+/* ── Channel compact menu (homepage) ── */
+.chmenu { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:8px; margin-bottom:16px; }
+.chmenu-item {
+  display:flex; align-items:center; gap:10px;
+  background:var(--card); border:1px solid var(--line); border-left:4px solid var(--chcolor);
+  border-radius:9px; padding:9px 12px; cursor:pointer; transition:transform .15s, box-shadow .15s;
+}
+.chmenu-item:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(16,20,24,.08); }
+.chmenu-item .cn { font-size:13.5px; font-weight:600; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.chmenu-item .cpk { font-family:'Space Grotesk','Noto Sans Thai',sans-serif; font-size:15px; font-weight:700; color:var(--chcolor); }
+.chmenu-item .go { color:var(--blue); font-size:13px; }
+@media (max-width:720px){ .chmenu { grid-template-columns:1fr; } }
+
 /* ── Table ── */
 table { width:100%; border-collapse:collapse; }
 th { text-align:left; font-size:11px; font-weight:600; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); padding:8px 12px; border-bottom:2px solid var(--line); white-space:nowrap; }
@@ -204,6 +220,7 @@ td.peakcell { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size
   .chartbox.mini { height: 120px; }
   .minigrid { grid-template-columns: 1fr; }
   .tabs button { font-size: 13px; padding: 8px 10px; }
+  .tabs select { max-width: 100%; }
   .sechead { font-size: 16px; margin: 22px 0 10px; }
 
   /* Table → card list */
@@ -301,8 +318,10 @@ let VIEW = 'overview';      // 'overview' | 'compare' | channel name
 let DATE = null;            // null = ยังไม่เลือก (ใช้วันที่ล่าสุด), '' = ทั้งหมด, 'YYYY-MM-DD' = วันนั้น
 let charts = [];
 let COMPARE_RANGE = 7;      // จำนวนวันที่แสดงในหน้าเปรียบเทียบ; 0 = ทั้งหมด
+let COMPARE_SLOT = 0;       // slot ที่เลือกในหน้าเปรียบเทียบ (index ใน SLOTS)
 let RANK_FULL = false;      // ตาราง Program Ranking: แสดง 10 อันดับแรกก่อน
 let MINI_FULL = false;      // กราฟแยกรายการ: แสดง 6 อันแรกก่อน
+let TOPLIVE_FULL = false;   // Top Live (หน้าแรก): แสดง 10 อันดับแรกก่อน
 
 function fmt(n){ return (n||0).toLocaleString('th-TH'); }
 function chColor(ch){ return CH_COLORS[ch] || '#64748b'; }
@@ -357,7 +376,7 @@ function renderTabs(){
 function go(view){
   const switching = (view==='compare') !== (VIEW==='compare');
   VIEW=view;
-  RANK_FULL=false; MINI_FULL=false;
+  RANK_FULL=false; MINI_FULL=false; TOPLIVE_FULL=false;
   if(switching) load(); else render();
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -388,65 +407,90 @@ function renderOverview(){
     const [la,pa] = channelSortScore(a), [lb,pb] = channelSortScore(b);
     return (lb-la) || (pb-pa);
   });
-  const allStreams = chs.flatMap(ch=>DATA.channels[ch].streams);
-  // Peak สูงสุดของวัน + รายการที่ทำได้
+  const allStreams = chs.flatMap(ch=>DATA.channels[ch].streams.map(s=>({...s, ch})));
+  const liveStreams = allStreams.filter(s=>s.is_live);
+  // Σ concurrent viewers ตอนนี้ (ผลรวม last sample ของทุกรายการที่กำลัง live)
+  const totalNow = liveStreams.reduce((sum,s)=>sum+(s.points[s.points.length-1].viewers||0),0);
   let topStream = null, topCh = '';
   for(const ch of chs) for(const s of DATA.channels[ch].streams){
     if(!topStream || s.peak > topStream.peak){ topStream = s; topCh = ch; }
   }
   const dateLbl = DATE || 'ทั้งหมด';
 
+  // 1) Hero: Σ concurrent ตอนนี้ + Peak วันนี้
   let h = `<div class="strip">
-    <div class="stat blue"><div class="lbl">Peak สูงสุด (${dateLbl})</div><div class="val num">${topStream?fmt(topStream.peak):'-'}</div><div class="sub">${topStream?shortTitle(topStream.title,40)+' · '+topCh:'-'}</div></div>
-    <div class="stat"><div class="lbl">จำนวนรายการ</div><div class="val num">${allStreams.length}</div><div class="sub">${dateLbl}</div></div>
+    <div class="stat red"><div class="lbl">Concurrent ตอนนี้ (รวมทุกช่อง)</div><div class="val num">${fmt(totalNow)}</div><div class="sub">${liveStreams.length} รายการ LIVE · รวม ${new Set(liveStreams.map(s=>s.ch)).size} ช่อง</div></div>
+    <div class="stat blue"><div class="lbl">Peak วันนี้ · ${dateLbl}</div><div class="val num">${topStream?fmt(topStream.peak):'-'}</div><div class="sub">${topStream?shortTitle(topStream.title,42)+' · '+topCh:'-'}</div></div>
   </div>`;
 
-  // Channel cards
-  h += `<div class="chgrid">`;
+  // 2) Concurrent ตอนนี้ แยกตามช่อง — เฉพาะช่องที่กำลัง live
+  const chNow = chs.map(ch=>{
+    const info = DATA.channels[ch];
+    const live = info.streams.filter(s=>s.is_live);
+    return {ch, cur: live.reduce((sum,s)=>sum+(s.points[s.points.length-1].viewers||0),0), n: live.length};
+  }).filter(x=>x.n>0).sort((a,b)=>b.cur-a.cur);
+  h += `<div class="sechead">Concurrent ตอนนี้ แยกตามช่อง</div>
+  <div class="panel tablepanel">
+  <table><thead><tr>
+    <th>ช่อง</th><th>LIVE</th><th>ผู้ชมตอนนี้</th>
+  </tr></thead><tbody>`;
+  if(!chNow.length){
+    h += `<tr><td colspan="3"><div class="empty" style="padding:20px 0">ไม่มีช่อง live ในขณะนี้</div></td></tr>`;
+  }
+  chNow.forEach(x=>{
+    h += `<tr>
+      <td data-label="ช่อง"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${chColor(x.ch)};display:inline-block;"></span>${x.ch}</span></td>
+      <td data-label="LIVE"><span class="chip live num">${x.n} LIVE</span></td>
+      <td class="peakcell" data-label="ผู้ชมตอนนี้" style="color:var(--red)">${fmt(x.cur)}</td>
+    </tr>`;
+  });
+  h += `</tbody></table></div>`;
+
+  // 3) Concurrent รวมทุกช่อง (กราฟเวลา)
+  h += `<div class="panel">
+    <div class="panel-head"><h2>Concurrent Viewers รวมทุกช่อง</h2><span class="hint">ข้อมูลวันที่ ${DATE||'ทั้งหมด'} · hover ดูค่า</span></div>
+    <div class="chartbox fullpage"><canvas id="comboChart"></canvas></div>
+  </div>`;
+
+  // 4) ช่อง — compact menu
+  h += `<div class="sechead">ช่อง</div><div class="chmenu">`;
   for(const ch of chs){
     const info = DATA.channels[ch];
     const liveN = info.streams.filter(s=>s.is_live).length;
-    h += `<div class="chcard" style="--chcolor:${chColor(ch)}" onclick="go('${ch.replace(/'/g,"\\'")}')">
-      <div class="name">${ch} ${liveN?`<span class="chip live num">${liveN} LIVE</span>`:`<span class="chip off">OFF AIR</span>`}</div>
-      <div class="peak num">${fmt(info.peak)}</div>
-      <div class="peaklbl">Peak Viewers</div>
-      <div class="row"><span class="k">จำนวนรายการ</span><span class="v num">${info.streams.length}</span></div>
-      <div class="go">ดูรายละเอียด →</div>
+    h += `<div class="chmenu-item" style="--chcolor:${chColor(ch)}" onclick="go('${ch.replace(/'/g,"\\'")}')">
+      <span class="cn">${ch}</span>
+      ${liveN?`<span class="chip live num">${liveN} LIVE</span>`:`<span class="chip off">OFF AIR</span>`}
+      <span class="cpk num">${fmt(info.peak)}</span>
+      <span class="go">→</span>
     </div>`;
   }
   h += `</div>`;
 
-  // ── Program Ranking (cross-channel, sorted by peak) ──
-  const ranked = chs.flatMap(ch=>DATA.channels[ch].streams.map(s=>({...s, ch})));
-  ranked.sort((a,b)=>b.peak-a.peak);
-  h += `<div class="sechead">Program Ranking — Peak Viewers</div>
+  // 5) Top Live ตอนนี้ (อยู่ล่างสุด) — เรียงตาม concurrent ตอนนี้, แสดง peak ด้วย
+  const liveSorted = [...liveStreams].sort((a,b)=>(b.points[b.points.length-1].viewers||0)-(a.points[a.points.length-1].viewers||0));
+  h += `<div class="sechead">Top Live ตอนนี้</div>
   <div class="panel tablepanel">
   <table><thead><tr>
-    <th>#</th><th>รายการ</th><th>ช่อง</th><th>Peak</th><th>Peak เมื่อ</th><th>ช่วงเวลา</th>
+    <th>#</th><th>รายการ</th><th>ช่อง</th><th>ดูตอนนี้</th><th>Peak</th><th>Peak เมื่อ</th>
   </tr></thead><tbody>`;
-  const shown = RANK_FULL ? ranked : ranked.slice(0,10);
-  shown.forEach((s,i)=>{
-    const startMs = toICT(s.actual_start||s.start_ts);
-    const endMs = toICT(s.end_ts||s.peak_ts);
-    const timeRange = startMs&&endMs ? fmtTime(startMs)+'–'+fmtTime(endMs) : '-';
+  if(!liveSorted.length){
+    h += `<tr><td colspan="6"><div class="empty" style="padding:24px 0">ไม่มีรายการ live ในขณะนี้</div></td></tr>`;
+  }
+  const liveShown = TOPLIVE_FULL ? liveSorted : liveSorted.slice(0,10);
+  liveShown.forEach((s,i)=>{
+    const cur = s.points[s.points.length-1].viewers||0;
     h += `<tr>
       <td class="num" data-label="#" style="font-weight:700;color:${i<3?'var(--red)':'var(--muted)'}">${i+1}</td>
-      <td class="t-title" data-label="รายการ"><a class="tlink" href="${s.url}" target="_blank">${shortTitle(s.title,55)}</a></td>
+      <td class="t-title" data-label="รายการ"><a class="tlink" href="${s.url}" target="_blank">${shortTitle(s.title,62)}</a></td>
       <td data-label="ช่อง"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${chColor(s.ch)};display:inline-block;"></span>${s.ch}</span></td>
+      <td class="peakcell" data-label="ดูตอนนี้" style="color:var(--red)">${fmt(cur)}</td>
       <td class="peakcell" data-label="Peak" style="color:${chColor(s.ch)}">${fmt(s.peak)}</td>
       <td class="num" data-label="Peak เมื่อ" style="white-space:nowrap;color:var(--muted)">${fmtTsTime(s.peak_ts)}</td>
-      <td class="num" data-label="ช่วงเวลา" style="white-space:nowrap">${timeRange}</td>
     </tr>`;
   });
   h += `</tbody></table>`;
-  if(!RANK_FULL && ranked.length > 10) h += `<button class="morebtn" onclick="RANK_FULL=true;render()">แสดงทั้งหมด ${ranked.length} รายการ ↓</button>`;
+  if(!TOPLIVE_FULL && liveSorted.length > 10) h += `<button class="morebtn" onclick="TOPLIVE_FULL=true;render()">แสดงทั้งหมด ${liveSorted.length} รายการ ↓</button>`;
   h += `</div>`;
-
-  // Combined concurrent chart (sum per channel)
-  h += `<div class="panel">
-    <div class="panel-head"><h2>Concurrent Viewers รวมทุกช่อง</h2><span class="hint">ข้อมูลวันที่ ${DATE||'ทั้งหมด'}</span></div>
-    <div class="chartbox fullpage"><canvas id="comboChart"></canvas></div>
-  </div>`;
 
   document.getElementById('content').innerHTML = h;
   drawComboChart(chs);
@@ -624,6 +668,10 @@ function setCompareRange(range){
   COMPARE_RANGE = range;
   render();
 }
+function setCompareSlot(i){
+  COMPARE_SLOT = i;
+  render();
+}
 async function renderCompare(){
   if(!SLOTCMP){
     try{
@@ -637,7 +685,7 @@ async function renderCompare(){
   const slots = SLOTCMP.slots||[];
   let h = `<div class="sechead" style="margin-top:0">เปรียบเทียบ Live รายการข่าว</div>
     <div class="compare-toolbar">
-      <span class="range-label">Peak viewers รายวัน · เลือกช่วงข้อมูลที่ต้องการดู</span>
+      <span class="range-label">เลือกช่วงเวลาที่ต้องการดู (การ์ดด้านล่าง) · Peak viewers รายวัน</span>
       <div class="range-buttons">
         <button class="${COMPARE_RANGE===7?'active':''}" onclick="setCompareRange(7)">7 วัน</button>
         <button class="${COMPARE_RANGE===14?'active':''}" onclick="setCompareRange(14)">14 วัน</button>
@@ -651,81 +699,83 @@ async function renderCompare(){
     return;
   }
 
-  // Summary: แสดงผลล่าสุดของแต่ละช่วงก่อน ให้ผู้ใช้เห็นคำตอบทันที
+  // การ์ดสรุป = tab เลือกช่วงเวลา: แสดงผู้ชนะล่าสุดของแต่ละ slot, คลิกเพื่อเปิดรายละเอียด
+  if(COMPARE_SLOT >= slots.length) COMPARE_SLOT = 0;
   h += `<div class="compare-summary">`;
-  slots.forEach(slot=>{
+  slots.forEach((slot,si)=>{
     const allDates = new Set();
     slot.programs.forEach(p=>Object.keys(p.days).forEach(d=>allDates.add(d)));
     const latest = [...allDates].sort().reverse()[0];
     const rows = latest ? slot.programs.map(p=>({name:progLabel(p), peak:p.days[latest]?.peak||0})).filter(x=>x.peak>0).sort((a,b)=>b.peak-a.peak) : [];
     const winner = rows[0];
-    h += `<div class="stat blue">
-      <div class="lbl">${slot.name} · ล่าสุด</div>
+    const active = si===COMPARE_SLOT;
+    h += `<div class="stat blue${active?' slot-active':''}" style="cursor:pointer;${active?'border-color:var(--red);box-shadow:0 4px 14px rgba(220,38,38,.12);':''}" onclick="setCompareSlot(${si})">
+      <div class="lbl">${slot.name} · ล่าสุด${active?' <span style="color:var(--red)">●</span>':''}</div>
       <div class="val num">${winner?fmt(winner.peak):'-'}</div>
       <div class="sub">${winner?winner.name:'ยังไม่มีข้อมูล'}${latest?' · '+slotDateLabel(latest):''}</div>
     </div>`;
   });
-  h += `</div><div class="compare-panels">`;
-
-  slots.forEach((slot,si)=>{
-    const allDates = new Set();
-    slot.programs.forEach(p=>Object.keys(p.days).forEach(d=>allDates.add(d)));
-    const descDates = [...allDates].sort().reverse();
-    const dates = COMPARE_RANGE ? descDates.slice(0,COMPARE_RANGE) : descDates;
-    const chartDates = [...dates].sort();
-    h += `<div class="panel">
-      <div class="panel-head"><h2>${slot.name}</h2><span class="hint">Peak viewers · Δ% เทียบวันก่อนหน้า · เวลาออกอากาศ</span></div>
-      <div class="chartbox fullpage"><canvas id="slotChart${si}"></canvas></div>
-      <div class="tablepanel compare-table" style="margin-top:16px;overflow-x:auto">
-      <table><thead><tr><th>วันที่</th>`;
-    slot.programs.forEach(p=>{
-      h += `<th class="program-head" style="text-align:right"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${chColor(p.channel)};display:inline-block"></span>${p.name}</span></th>`;
-    });
-    h += `</tr></thead><tbody>`;
-    dates.forEach(date=>{
-      h += `<tr><td class="num date-cell" data-label="วันที่" style="white-space:nowrap;font-weight:600">${slotDateLabel(date)}</td>`;
-      slot.programs.forEach(p=>{
-        const e = p.days[date];
-        const prev = p.days[prevDateOf(descDates,date)];
-        if(!e){
-          h += `<td class="num" data-label="${p.name}" style="text-align:right;color:var(--muted)">—</td>`;
-        }else{
-          h += `<td class="num" data-label="${p.name}" style="text-align:right">
-            <span class="peakcell">${fmt(e.peak)}</span>
-            <span class="delta" style="font-size:11.5px;margin-left:6px">${diffHtml(e.peak, prev?prev.peak:null)}</span>
-            <div class="airtime" style="font-size:11px;color:var(--muted)">${e.start}–${e.end}</div>
-          </td>`;
-        }
-      });
-      h += `</tr>`;
-    });
-    h += `</tbody></table></div></div>`;
-
-    // Store filtered dates for chart creation below.
-    slot._compareDates = chartDates;
-  });
   h += `</div>`;
+
+  // แสดงรายละเอียดเฉพาะ slot ที่เลือก (กราฟ + ตาราง) — ไม่ต้อง scroll ผ่าน 5 ช่วง
+  const slot = slots[COMPARE_SLOT];
+  const si = COMPARE_SLOT;
+  const allDates = new Set();
+  slot.programs.forEach(p=>Object.keys(p.days).forEach(d=>allDates.add(d)));
+  const descDates = [...allDates].sort().reverse();
+  const dates = COMPARE_RANGE ? descDates.slice(0,COMPARE_RANGE) : descDates;
+  const chartDates = [...dates].sort();
+
+  // กราฟขึ้นก่อน แล้วตามด้วยตารางรายละเอียด
+  h += `<div class="panel">
+    <div class="panel-head"><h2>แนวโน้ม Peak — ${slot.name}</h2></div>
+    <div class="chartbox fullpage"><canvas id="slotChart${si}"></canvas></div>
+  </div>`;
+
+  h += `<div class="panel">
+    <div class="panel-head"><h2>${slot.name}</h2><span class="hint">Peak viewers · Δ% เทียบวันก่อนหน้า · เวลาออกอากาศ</span></div>
+    <div class="tablepanel compare-table" style="overflow-x:auto">
+    <table><thead><tr><th>วันที่</th>`;
+  slot.programs.forEach(p=>{
+    h += `<th class="program-head" style="text-align:right"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${chColor(p.channel)};display:inline-block"></span>${p.name}</span></th>`;
+  });
+  h += `</tr></thead><tbody>`;
+  dates.forEach(date=>{
+    h += `<tr><td class="num date-cell" data-label="วันที่" style="white-space:nowrap;font-weight:600">${slotDateLabel(date)}</td>`;
+    slot.programs.forEach(p=>{
+      const e = p.days[date];
+      const prev = p.days[prevDateOf(descDates,date)];
+      if(!e){
+        h += `<td class="num" data-label="${p.name}" style="text-align:right;color:var(--muted)">—</td>`;
+      }else{
+        h += `<td class="num" data-label="${p.name}" style="text-align:right">
+          <span class="peakcell">${fmt(e.peak)}</span>
+          <span class="delta" style="font-size:11.5px;margin-left:6px">${diffHtml(e.peak, prev?prev.peak:null)}</span>
+          <div class="airtime" style="font-size:11px;color:var(--muted)">${e.start}–${e.end}</div>
+        </td>`;
+      }
+    });
+    h += `</tr>`;
+  });
+  h += `</tbody></table></div></div>`;
+
   document.getElementById('content').innerHTML = h;
 
-  slots.forEach((slot,si)=>{
-    const dates = slot._compareDates || [];
-    charts.push(new Chart(document.getElementById('slotChart'+si),{
-      type:'line',
-      data:{labels:dates.map(slotDateLabel),datasets:slot.programs.map(p=>({
-        label:progLabel(p),
-        data:dates.map(d=>p.days[d]?p.days[d].peak:null),
-        borderColor:chColor(p.channel), backgroundColor:chColor(p.channel),
-        borderWidth:2.5, tension:.3, spanGaps:true, pointRadius:3, pointHoverRadius:5
-      }))},
-      options:{
-        responsive:true, maintainAspectRatio:false,
-        interaction:{mode:'index',intersect:false},
-        plugins:{legend:{position:'bottom',labels:{usePointStyle:true,pointStyle:'circle',font:{family:'Noto Sans Thai',size:12}}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.parsed.y)} คน`}}},
-        scales:{x:{ticks:{maxTicksLimit:7}},y:{beginAtZero:true,ticks:{callback:v=>fmt(v)},grid:{color:'#eef0f3'}}}
-      }
-    }));
-    delete slot._compareDates;
-  });
+  charts.push(new Chart(document.getElementById('slotChart'+si),{
+    type:'line',
+    data:{labels:chartDates.map(slotDateLabel),datasets:slot.programs.map(p=>({
+      label:progLabel(p),
+      data:chartDates.map(d=>p.days[d]?p.days[d].peak:null),
+      borderColor:chColor(p.channel), backgroundColor:chColor(p.channel),
+      borderWidth:2.5, tension:.3, spanGaps:true, pointRadius:3, pointHoverRadius:5
+    }))},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom',labels:{usePointStyle:true,pointStyle:'circle',font:{family:'Noto Sans Thai',size:12}}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.parsed.y)} คน`}}},
+      scales:{x:{ticks:{maxTicksLimit:7}},y:{beginAtZero:true,ticks:{callback:v=>fmt(v)},grid:{color:'#eef0f3'}}}
+    }
+  }));
 }
 function prevDateOf(sortedDescDates, date){
   const i = sortedDescDates.indexOf(date);
