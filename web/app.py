@@ -47,6 +47,7 @@ SLOTS = [
     {"name": "ข่าวเย็น (16:00)", "programs": [
         {"name": "ThaiRath News · ข่าวเย็นไทยรัฐ", "channel": "ThaiRath News", "kw": ["ข่าวเย็นไทยรัฐ", "ไทยรัฐทันข่าว"]},
         {"name": "ข่าวช่อง8 · คุยข่าวเย็น", "channel": "ข่าวช่อง8", "kw": ["คุยข่าวเย็น"]},
+        {"name": "Workpoint 23 · ชงข่าวเขย่าจอ", "channel": "ข่าวเวิร์คพอยท์ 23", "kw": ["ชงข่าวเขย่าจอ", "ชงข่าว เขย่าLIVE"]},
     ]},
     {"name": "Live ข่าวเที่ยง", "programs": [
         {"name": "ครอบครัวข่าว3 · เที่ยงวันทันเหตุการณ์", "channel": "ครอบครัวข่าว3", "kw": ["เที่ยงวันทันเหตุการณ์"]},
@@ -60,8 +61,7 @@ SLOTS = [
         {"name": "ข่าวช่อง8 · ลุยชนข่าว", "channel": "ข่าวช่อง8", "kw": ["ลุยชนข่าว"]},
         {"name": "ThaiRath News · ไทยรัฐนิวส์โชว์", "channel": "ThaiRath News", "kw": ["ไทยรัฐนิวส์โชว์"]},
         {"name": "Amarin TV · ทุบโต๊ะข่าว", "channel": "Amarin TV", "kw": ["ทุบโต๊ะข่าว"]},
-        {"name": "Ch7HDNews · จาะประเด็นข่าว 7HD", "channel": "Ch7HDNews", "kw": ["จาะประเด็นข่าว"]},
-        {"name": "Workpoint 23 · ชงข่าวเขย่าจอ", "channel": "ข่าวเวิร์คพอยท์ 23", "kw": ["ชงข่าวเขย่าจอ", "ชงข่าว เขย่าLIVE"]},
+        {"name": "Ch7HD · ข่าวภาคค่ำ", "channel": "Ch7HDNews", "kw": ["ข่าวภาคค่ำ"]},
     ]},
     {"name": "รายการ Talk", "programs": [
         {"name": "ThaiRath News · NEWSROOM", "channel": "ThaiRath News", "kw": ["NEWSROOM", "นิวส์รูม"]},
