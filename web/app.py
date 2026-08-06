@@ -63,6 +63,12 @@ SLOTS = [
         {"name": "Amarin TV · ทุบโต๊ะข่าว", "channel": "Amarin TV", "kw": ["ทุบโต๊ะข่าว"]},
         {"name": "Ch7HD · ข่าวภาคค่ำ", "channel": "Ch7HDNews", "kw": ["ข่าวภาคค่ำ"]},
     ]},
+    {"name": "Live Report", "programs": [
+        {"name": "PPTV HD 36 · Live Report", "channel": "PPTV HD 36", "kw": ["ฮลุน"]},
+        {"name": "ThaiRath News · สดไทยรัฐ", "channel": "ThaiRath News", "kw": ["ฮลุน"]},
+        {"name": "ข่าวช่อง8 · สดสด", "channel": "ข่าวช่อง8", "kw": ["ฮลุน"]},
+        {"name": "Amarin TV · สดอมรินทร์", "channel": "Amarin TV", "kw": ["ฮลุน"]},
+    ]},
     {"name": "รายการ Talk", "programs": [
         {"name": "ThaiRath News · NEWSROOM", "channel": "ThaiRath News", "kw": ["NEWSROOM", "นิวส์รูม"]},
         {"name": "ThaiRath News · เปิดปาก", "channel": "ThaiRath News", "kw": ["เปิดปาก"]},
@@ -133,11 +139,16 @@ def api_slot_compare():
         progs = []
         for prog in slot["programs"]:
             days = {}
-            for s in streams.values():
-                if s["channel"] != prog["channel"]:
-                    continue
-                if not any(k in s["title"] for k in prog["kw"]):
-                    continue
+            for (ch_key, vid_key), s in streams.items():
+                # Live Report / หมวดที่ match ตาม video ID ตรงๆ (เหตุการณ์เดียว ต่างช่อง)
+                if prog.get("vids"):
+                    if vid_key not in prog["vids"]:
+                        continue
+                else:
+                    if s["channel"] != prog["channel"]:
+                        continue
+                    if not any(k in s["title"] for k in prog["kw"]):
+                        continue
                 e = days.get(s["date"])
                 if e is None:
                     days[s["date"]] = {
