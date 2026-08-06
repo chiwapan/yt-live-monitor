@@ -1,0 +1,56 @@
+# yt-live-monitor — แยกจาก Hermes อย่างสมบูรณ์
+# UI-friendly: ใช้ absolute path ชี้ไปที่ repo บน host (/opt/data คือ host mount)
+# .env อยู่ที่ /opt/data/projects/yt-live-monitor/.env (สร้างไว้แล้ว = .env.compose)
+
+services:
+  web:
+    build:
+      context: /opt/data/projects/yt-live-monitor
+      dockerfile: Dockerfile
+    container_name: yt-live-monitor-web
+    restart: unless-stopped
+    ports:
+      - "8899:8899"
+    environment:
+      - PORT=8899
+      - LIVE_JSONL=/data/live_data.jsonl
+    volumes:
+      - yt_live_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8899/api/ping',timeout=4)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+  collector:
+    build:
+      context: /opt/data/projects/yt-live-monitor
+      dockerfile: Dockerfile.collector
+    container_name: yt-live-monitor-collector
+    restart: unless-stopped
+    env_file:
+      - /opt/data/projects/yt-live-monitor/.env
+    environment:
+      - TZ=Asia/Bangkok
+      - LIVE_JSONL=/data/live_data.jsonl
+      - STATE_FILE=/data/yt-live-daily-state.json
+      - GAPI_SCRIPT=/app/google_api.py
+    volumes:
+      - yt_live_data:/data
+
+  # Cloudflare tunnel — serve live.chiwapan.online -> localhost:8899
+  # network_mode: host เห็น localhost:8899 ที่ web publish (เหมือน config เดิมใน Hermes)
+  # ใช้ sh -c เอา token จาก env แทน interpolation เชิง compose
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: yt-live-monitor-tunnel
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - /opt/data/projects/yt-live-monitor/.env
+    command: ["sh", "-c", "cloudflared tunnel run --token \"$CF_TUNNEL_TOKEN\""]
+    depends_on:
+      - web
+
+volumes:
+  yt_live_data:
