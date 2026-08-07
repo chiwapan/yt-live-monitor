@@ -72,8 +72,8 @@ services:
     volumes:
       - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_data.jsonl:/data/views_data.jsonl
       - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_live.jsonl:/data/views_live.jsonl
-      - /docker/hermes-agent-r6gh/data/google_token.json:/token/google_token.json:ro
-      - /docker/hermes-agent-r6gh/data/google_client_secret.json:/token/google_client_secret.json:ro
+      - /docker/hermes-agent-r6gh/data/google_token.json:/token/google_token.json
+      - /docker/hermes-agent-r6gh/data/google_client_secret.json:/token/google_client_secret.json
     command: >
       sh -c "while true; do python yt-views-collector.py;
       echo '[views] sleeping 24h'; sleep 86400; done"
