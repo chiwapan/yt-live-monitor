@@ -1,7 +1,16 @@
 token_sheets.json
 live_data.jsonl
 .env
+.env.compose
+views_data.jsonl
+views_live.jsonl
 __pycache__/
 live_data.jsonl.bak*
 backfill_queue.tsv
 backfill_queue.done
+
+# runtime artifacts
+*.log
+*.bak
+web/views_mockup.html
+yt-live-daily-state.json

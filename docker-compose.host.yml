@@ -1,0 +1,71 @@
+# yt-live-monitor — host ใช้ (path = /docker/hermes-agent-r6gh/data/...)
+# รัน: docker compose -f docker-compose.hostinger.yml up -d --build
+# .env = /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
+
+services:
+  web:
+    build:
+      context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
+      dockerfile: Dockerfile
+    container_name: yt-live-monitor-web
+    restart: unless-stopped
+    ports:
+      - "8899:8899"
+    environment:
+      - PORT=8899
+      - LIVE_JSONL=/data/live_data.jsonl
+    volumes:
+      - yt_live_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8899/api/ping',timeout=4)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+  collector:
+    build:
+      context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
+      dockerfile: Dockerfile.collector
+    container_name: yt-live-monitor-collector
+    restart: unless-stopped
+    env_file:
+      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
+    environment:
+      - TZ=Asia/Bangkok
+      - LIVE_JSONL=/data/live_data.jsonl
+      - STATE_FILE=/data/yt-live-daily-state.json
+      - GAPI_SCRIPT=/app/google_api.py
+    volumes:
+      - yt_live_data:/data
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: yt-live-monitor-tunnel
+    restart: unless-stopped
+    network_mode: host
+    # compose อ่าน ${CF_TUNNEL_TOKEN} จาก .env ในโฟลเดอร์ทำงานโดยตรง (deterministic)
+    command: tunnel run --token ${CF_TUNNEL_TOKEN}
+    depends_on:
+      - web
+
+  # ── Views collector: batch รายวัน (Analytics API) แยกจาก live monitor ──
+  views-collector:
+    build:
+      context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
+      dockerfile: Dockerfile.views
+    container_name: yt-views-collector
+    restart: unless-stopped
+    env_file:
+      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
+    environment:
+      - TZ=Asia/Bangkok
+      - VIEWS_JSONL=/data/views_data.jsonl
+      - GAPI_SCRIPT=/app/google_api.py
+      - CMS_ID=6tGFEVDsxneJqsVjifQvEA
+      - TOP_N=20
+      - VIEWS_LOOKBACK_DAYS=1
+    volumes:
+      - yt_live_data:/data
+
+volumes:
+  yt_live_data:

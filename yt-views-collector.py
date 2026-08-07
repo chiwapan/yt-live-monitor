@@ -97,8 +97,9 @@ def query_channel_product(service, channel_id, start, end):
                     "subscribersLost,averageViewDuration,impressions,impressionsClickThroughRate"),
         "dimensions": "youtubeProduct",
     }
+    # onBehalfOfContentOwner เป็น system parameter ไม่ใช่ kwarg → ใส่ใน body ผ่าน _body
     req.update(extra)
-    return service.reports().query(**req).execute()
+    return service.reports().query(body=req).execute()
 
 
 def query_top_videos(service, channel_id, start, end, product):

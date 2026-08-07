@@ -69,7 +69,7 @@ SLOTS = [
         {"name": "ข่าวช่อง8 · ลุยชนข่าว", "channel": "ข่าวช่อง8", "kw": ["ลุยชนข่าว"]},
         {"name": "ThaiRath News · ไทยรัฐนิวส์โชว์", "channel": "ThaiRath News", "kw": ["ไทยรัฐนิวส์โชว์"]},
         {"name": "Amarin TV · ทุบโต๊ะข่าว", "channel": "Amarin TV", "kw": ["ทุบโต๊ะข่าว"]},
-        {"name": "Ch7HD · ข่าวภาคค่ำ", "channel": "Ch7HDNews", "kw": ["ข่าวภาคค่ำ"]},
+        {"name": "TOP NEWS LIVE · ข่าวภาคค่ำ", "channel": "TOP NEWS LIVE", "kw": ["ข่าวภาคค่ำ"]},
     ]},
     {"name": "Live Report", "programs": [
         {"name": "PPTV HD 36 · Live Report", "channel": "PPTV HD 36", "kw": ["Live Report"]},

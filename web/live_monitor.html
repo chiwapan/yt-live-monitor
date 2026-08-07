@@ -304,14 +304,17 @@ const CH_COLORS = {
   'ข่าวเวิร์คพอยท์ 23': '#8b5cf6',  // ม่วง
   'Ch7HDNews':        '#0d9488',   // เขียวอมฟ้า
   'Ch7HD':            '#0f766e',
+  'TOP NEWS LIVE':    '#0f766e',   // ใช้สีเดียวกับ Ch7HD เดิม
   'Thai PBS':         '#475569',   // เทาเข้ม
   'terodigital':      '#d97706',   // เหลืองเข้ม
   'Dailynews Online': '#2563eb',   // น้ำเงิน
 };
-function chColor(ch){ return CH_COLORS[ch] || '#64748b'; }
-// ป้าย "ชื่อช่อง · ชื่อรายการ" — ถ้าชื่อซ้ำกันแสดงครั้งเดียว
-function sameName(a,b){ return (a||'').trim().toLowerCase()===(b||'').trim().toLowerCase(); }
-function progLabel(p){ return p.name; }
+function chColor(ch){ 
+  return CH_COLORS[ch] || '#64748b'; 
+}
+function progLabel(p){ 
+  return p.name;
+}
 let DATA = null;
 let SLOTCMP = null;        // /api/slot-compare data (compare view)
 let VIEW = 'overview';      // 'overview' | 'compare' | channel name
@@ -324,8 +327,6 @@ let RANK_FULL = false;      // ตาราง Program Ranking: แสดง 10 
 let MINI_FULL = false;      // กราฟแยกรายการ: แสดง 6 อันแรกก่อน
 
 function fmt(n){ return (n||0).toLocaleString('th-TH'); }
-function chColor(ch){ return CH_COLORS[ch] || '#64748b'; }
-
 function toICT(ts){
   if(!ts) return null;
   if(ts.endsWith('Z')) return new Date(ts).getTime();
