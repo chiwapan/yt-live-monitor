@@ -493,7 +493,10 @@ def check_if_live(video_ids_list):
         broadcast = snippet.get("liveBroadcastContent")
 
         if actual_end:
+            # จบจริงแล้ว — YouTube บางทียังคืน concurrentViewers เก่าค้างอยู่หลังจบ
+            # ทำให้ ghost stream กลับมา live ตลอด (บั๊ก HN-WTZiCuSA). จบแล้ว = ไม่เป็น live
             confirmed_ended.add(vid)
+            continue
 
         # PREMIERE / NON-LIVE DETECTION:
         # A YouTube Premiere sets liveBroadcastContent="live" during the event, but the
