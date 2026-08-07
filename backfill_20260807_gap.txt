@@ -1,0 +1,39 @@
+# YT Live monitor — คลิปที่ข้อมูลขาดช่วง quota หมด (2026-08-07 15:15–16:10 ICT)
+# ประเภท A = ขาดกลางท่อน (มีข้อมูลก่อน+หลัง โดน gap กลาง)
+# ประเภท B = เกิด/จบในหน้าต่าง (ข้อมูลช่วงต้น/ปลายหาย)
+
+== ประเภท A (ขาดกลาง — 7) ==
+A ThaiRath News | x37jys4xbDw | 10 จุด (15:20–16:05) | https://www.youtube.com/watch?v=x37jys4xbDw | 🔴LIVE : สลด! กราดยิงรร.เทพศิรินทร์ นนทบุรี
+A ข่าวช่อง8 | 24kzm1J4yaA | 10 จุด (15:20–16:05) | https://www.youtube.com/watch?v=24kzm1J4yaA | 🔴 LIVE ! เกาะติดเหตุสลดโรงเรียนเทพศิรินทร์
+A ThaiPBSNews | TtvoKnvi0oc | 10 จุด (15:20–16:05) | https://www.youtube.com/watch?v=TtvoKnvi0oc | 🟠สด! เกาะติดเหตุยิงใน รร.เทพศิรินทร์
+A Thai PBS | TVOGzs9eAWw | 7 จุด (15:25–16:05) | https://www.youtube.com/watch?v=TVOGzs9eAWw | 🟠[Live] เกาะติดเหตุยิงใน รร.เทพศิรินทร์
+A โหนกระแส | lUfVGbAYtKE | 8 จุด (15:25–16:05) | https://www.youtube.com/watch?v=lUfVGbAYtKE | Live ตามต่อ.. สะเทือนขวัญ เสียงปืนสนั่น
+A SiroteTalk | c8vO9ozfooo | 10 จุด (15:20–16:05) | https://www.youtube.com/watch?v=c8vO9ozfooo | Live! ดับ 7 เจ็บอื้อโรงเรียนนรกบนดิน
+A News1 | OmantmxAJpk | 9 จุด (15:20–16:05) | https://www.youtube.com/watch?v=OmantmxAJpk | เรื่องนี้ที่ทัวร์ลง 07-08-69
+
+== ประเภท B (เกิด/จบในหน้าต่าง — 25) ==
+B TOP NEWS LIVE | JaGBxoMCp90 | จบในหน้าต่าง | https://www.youtube.com/watch?v=JaGBxoMCp90 | Live ภาคเช้า 07 ส.ค.
+B Amarin TV | fBxXSBYNPuw | จบในหน้าต่าง | https://www.youtube.com/watch?v=fBxXSBYNPuw | [🔴 LIVE]ด่วน! เหตุยิงโรงเรียนดัง
+B PPTV HD 36 | 3f2hMebHHPw | จบในหน้าต่าง | https://www.youtube.com/watch?v=3f2hMebHHPw | 🔴LIVE : เกาะติดสถานการณ์! เหตุยิง รร.
+B ช่อง8 Thai Ch8 | irdp4Dqdy5E | จบในหน้าต่าง | https://www.youtube.com/watch?v=irdp4Dqdy5E | 🔴Live สลด! เยาวชน กราดยิงโรงเรียน
+B Thai PBS | NTgIHpPVvOg | จบในหน้าต่าง | https://www.youtube.com/watch?v=NTgIHpPVvOg | 🔴 [Live] เหตุยิงในโรงเรียนเทพศิรินทร์
+B ThaiRath News | rhBbnRSZBtM | จบในหน้าต่าง | https://www.youtube.com/watch?v=rhBbnRSZBtM | 🔥LIVE นายกฯ เสียใจโศกนาฏกรรม
+B แนวหน้าออนไลน์ | T16FNAAv9WY | จบในหน้าต่าง | https://www.youtube.com/watch?v=T16FNAAv9WY | [Live] เป๊บซี่ ดีไหมล่ะ
+B PPTV HD 36 | OvOnDFDWVE8 | จบในหน้าต่าง | https://www.youtube.com/watch?v=OvOnDFDWVE8 | 🔴 Live จับข่าวคุย
+B ครอบครัวข่าว3 | kYrX0IMMQC0 | จบในหน้าต่าง | https://www.youtube.com/watch?v=kYrX0IMMQC0 | ถ่ายทอดสด "ช่อง 3 ตามติดข่าว"
+B NationTV Live | BuY-VuODB9A | จบในหน้าต่าง | https://www.youtube.com/watch?v=BuY-VuODB9A | 🔴LIVE คมชัดลึก ตอน กราดยิง 7 ศพ
+B Thai PBS | 6Mstck6gfgg | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=6Mstck6gfgg | 🔴[Live] รู้ใจวัยเก๋า
+B Ejan : อีจัน | 6QhZBfhhc8w | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=6QhZBfhhc8w | Live อัปเดตความคืบหน้า เหตุกราดยิง
+B Thai PBS | Qab-0mXIRKg | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=Qab-0mXIRKg | 🔴 [Live] ทุกทิศทั่วไทย
+B Dailynews Online | W5VuazIgTBA | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=W5VuazIgTBA | 🔴 LIVE : "นายกฯ อนุทิน"ลงพื้นที่!
+B THE STANDARD | 7sji_W-7r10 | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=7sji_W-7r10 | สด! นายกฯ ติดตามเหตุยิงในโรงเรียน
+B suthichai live | 6Ni7T6R142I | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=6Ni7T6R142I | เดินหน้าหรือถอยหลัง โฉนดชุมชน
+B ThaiRath News | Depi4dSRlh0 | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=Depi4dSRlh0 | 🔴LIVE: เกิดอะไรขึ้น ? เด็ก ม.3 ยิงปู่ ย่า
+B PPTV HD 36 | nnfmVJTOKv8 | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=nnfmVJTOKv8 | 🔴 Live เข้มข่าวเย็น ช็อกซ้ำ!
+B terodigital | A5-TkLTnBmQ | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=A5-TkLTnBmQ | 🔴 [LIVE] ข่าวร้ายไม่เว้นวัน
+B ข่าวเวิร์คพอยท์ 23 | dvMIAuPaFrg | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=dvMIAuPaFrg | 🔴 Live ชงข่าวเขย่าจอ
+B Ch7HDNews | Fu7L1ecmekw | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=Fu7L1ecmekw | ข่าวเย็นประเด็นร้อน
+B แนวหน้าออนไลน์ | kUbPHX7SHhE | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=kUbPHX7SHhE | [Live] แนวหน้าข่าวค่ำ
+B NationTV Live | ad23F8M6ijU | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=ad23F8M6ijU | 🔴 LIVE ทันข่าวเย็น
+B Thairath Sport | KZCrWPT60rc | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=KZCrWPT60rc | 🔴 LIVE: ทีมชาติไทย ซ้อมครั้งสุดท้าย
+B TODAY | CD20VsCgS2w | เกิดในหน้าต่าง | https://www.youtube.com/watch?v=CD20VsCgS2w | หวานเจี๊ยบ อนุทิน - มิน อ่อง หล่าย

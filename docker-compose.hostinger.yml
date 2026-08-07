@@ -51,32 +51,34 @@ services:
       retries: 3
       start_period: 30s
 
-  # ── Views collector: batch รายวัน (Analytics API, OAuth) แยกจาก live monitor ──
-  views-collector:
-    build:
-      context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
-      dockerfile: Dockerfile.views
-    container_name: yt-views-collector
-    restart: unless-stopped
-    env_file:
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
-    environment:
-      - TZ=Asia/Bangkok
-      - MODE=snapshot
-      - VIEWS_JSONL=/data/views_data.jsonl
-      - VIEWS_LIVE_JSONL=/data/views_live.jsonl
-      - GAPI_SCRIPT=/app/google_api.py
-      - HERMES_HOME=/token
-      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
-      - SNAPSHOT_TOP=15
-    volumes:
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_data.jsonl:/data/views_data.jsonl
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_live.jsonl:/data/views_live.jsonl
-      - /docker/hermes-agent-r6gh/data/google_token.json:/token/google_token.json
-      - /docker/hermes-agent-r6gh/data/google_client_secret.json:/token/google_client_secret.json
-    command: >
-      sh -c "while true; do python yt-views-collector.py;
-      echo '[views] sleeping 1h'; sleep 3600; done"
+  # ── Views collector (DISABLED 2026-08-07): เดิมรัน MODE=snapshot เขียน views_live.jsonl
+  #    ตอนนี้ cron script `run_views_snapshot.sh` (job cb8873993d7e) ดูแลแทน — deterministic กว่า
+  #    ป้องกัน compose up คืนมาตัวเบิ้ล. ลบ comment กลับได้ถ้าต้องการคืน service นี้
+  # views-collector:
+  #   build:
+  #     context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
+  #     dockerfile: Dockerfile.views
+  #   container_name: yt-views-collector
+  #   restart: unless-stopped
+  #   env_file:
+  #     - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
+  #   environment:
+  #     - TZ=Asia/Bangkok
+  #     - MODE=snapshot
+  #     - VIEWS_JSONL=/data/views_data.jsonl
+  #     - VIEWS_LIVE_JSONL=/data/views_live.jsonl
+  #     - GAPI_SCRIPT=/app/google_api.py
+  #     - HERMES_HOME=/token
+  #     - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
+  #     - SNAPSHOT_TOP=15
+  #   volumes:
+  #     - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_data.jsonl:/data/views_data.jsonl
+  #     - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_live.jsonl:/data/views_live.jsonl
+  #     - /docker/hermes-agent-r6gh/data/google_token.json:/token/google_token.json
+  #     - /docker/hermes-agent-r6gh/data/google_client_secret.json:/token/google_client_secret.json
+  #   command: >
+  #     sh -c "while true; do python yt-views-collector.py;
+  #     echo '[views] sleeping 1h'; sleep 3600; done"
 
   # Cloudflare tunnel — serve live.chiwapan.online -> localhost:8899
   # network_mode: host เห็น localhost:8899 ที่ web publish (เหมือน config เดิมใน Hermes)

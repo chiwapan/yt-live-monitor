@@ -20,6 +20,7 @@ Config (all via env vars — zero tokens in code):
 
 import os
 import sys
+import time
 import json
 import urllib.request
 import urllib.parse
@@ -29,7 +30,14 @@ import subprocess
 from datetime import datetime, timezone, timedelta
 
 # ─── Config (all from env) ───
+# Multi-key rotation: ใช้ YOUTUBE_API_KEYS (comma-separated) ถ้าตั้งไว้, fallback YOUTUBE_API_KEY
+# เดิมตัวเดียว. แต่ละ key อยู่คนละ Google Cloud project → quota แยกกัน.
+# Purpose: live collector ต้องทำงาน 24 ชม. — ไม่จม 403 quotaExceeded จาก key เดียวโดนกินหมด
 API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
+API_KEYS = [k.strip() for k in os.environ.get("YOUTUBE_API_KEYS", "").split(",") if k.strip()]
+if not API_KEYS and API_KEY:
+    API_KEYS = [API_KEY]
+API_KEYS = list(dict.fromkeys(API_KEYS))  # dedupe รักษาลำดับ
 SHEET_ID = os.environ.get("YT_SHEET_ID", "")
 GAPI_SCRIPT = os.environ.get("GAPI_SCRIPT",
     "/opt/data/skills/productivity/google-workspace/scripts/google_api.py")
@@ -85,20 +93,77 @@ def floor_5min(dt):
 
 # ─── YouTube Data API (API key only, no OAuth needed for public data) ───
 
-def yt_api(endpoint, params):
-    """Call YouTube Data API v3 with API key."""
-    params["key"] = API_KEY
-    url = f"https://www.googleapis.com/youtube/v3/{endpoint}?{urllib.parse.urlencode(params)}"
-    req = urllib.request.Request(url)
+def _kv_key_index():
+    """Load active key index from state file (module reloads every tick → persist)."""
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        print(f"⚠️ API error {e.code}: {e.reason}")
+        with open(STATE_FILE) as _f:
+            _s = json.load(_f)
+            return int(_s.get("_active_api_key_idx", 0))
+    except Exception:
+        return 0
+
+
+def _kv_set_key_index(idx):
+    idx = idx % max(len(API_KEYS), 1)
+    try:
+        with open(STATE_FILE) as _f:
+            _s = json.load(_f)
+        _s["_active_api_key_idx"] = idx
+        with open(STATE_FILE, "w") as _f:
+            json.dump(_s, _f)
+    except Exception:
+        pass
+    return idx
+
+
+def yt_api(endpoint, params):
+    """Call YouTube Data API v3 with API key. Multi-key rotation on quotaExceeded (403).
+    แต่ละ key อยู่ project แยก → quota ต่างก้อน; สลับ key ต่อเนื่องทุก tick กันคว่ตรหมดก้อนเดียวตลอดวัน."""
+    if not API_KEYS:
+        params["key"] = ""
         return {}
-    except Exception as e:
-        print(f"⚠️ API error: {e}")
-        return {}
+    n = len(API_KEYS)
+    start = _kv_key_index() % n
+    for attempt in range(n):
+        idx = (start + attempt) % n
+        k = API_KEYS[idx]
+        params["key"] = k
+        url = f"https://www.googleapis.com/youtube/v3/{endpoint}?{urllib.parse.urlencode(params)}"
+        req = urllib.request.Request(url)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                # advance to next key so usage spreads across all projects each call
+                _kv_set_key_index(idx + 1)
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode()[:500]
+            except Exception:
+                pass
+            # 403 quotaExceeded / rateLimitExceeded และ 429 Too Many Requests
+            # ล้วนเป็น "key นี้ใช้ไม่ได้ตอนนี้" → ต้อง rotate ไป key ถัดไป ห้าม return {} ทิ้ง batch
+            # (bug 2026-08-07: 429 ทำให้ batch ที่มี live คนดูหลักหมื่นหายทั้งก้อน)
+            transient = (
+                e.code == 429
+                or (e.code == 403 and (
+                    "quotaExceeded" in body
+                    or "rateLimitExceeded" in body
+                    or "userRateLimitExceeded" in body
+                ))
+            )
+            if transient:
+                print(f"⚠️ key {k[:8]}… {e.code} ({'quota' if 'quota' in body else 'rate-limit'}) → rotate to next")
+                time.sleep(0.5)
+                continue
+            print(f"⚠️ API error {e.code} (key {k[:8]}…): {e.reason}")
+            return {}
+        except Exception as e:
+            print(f"⚠️ API error (key {k[:8]}…): {e} → rotate to next")
+            time.sleep(0.5)
+            continue
+    print("⛔ ทุก key quota หมดในรอบนี้ — ไม่เก็บข้อมูลตอนนี้")
+    return {}
 
 
 # ─── RSS Discovery (0 quota) ───
@@ -495,8 +560,8 @@ def append_local_jsonl(live_streams, now):
 # ─── Main ───
 
 def main():
-    if not API_KEY:
-        print("⚠️ YOUTUBE_API_KEY not set")
+    if not API_KEYS:
+        print("⚠️ YOUTUBE_API_KEY / YOUTUBE_API_KEYS not set")
         sys.exit(1)
     # SHEET_ID ไม่บังคับแล้ว — ถ้าไม่ตั้ง = ไม่ export Sheets (JSONL เป็น database หลัก)
     # sheets_append/update มี guard ข้ามเองอยู่แล้ว
