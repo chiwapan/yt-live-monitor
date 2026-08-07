@@ -152,6 +152,12 @@ def _save_health(h):
     _HEALTH_CACHE = h
 
 
+def any_key_alive():
+    """ยังมี key ไหนใช้ได้ไหม — ใช้ตัดวงจรก่อนยิง API ที่รู้อยู่แล้วว่าพัง."""
+    h = _load_health()
+    return any(_key_alive(h, k) for k in API_KEYS)
+
+
 def _key_alive(h, k):
     info = h["keys"].get(k, {})
     return time.time() >= info.get("dead_until", 0)
@@ -219,6 +225,10 @@ def yt_api(endpoint, params, _cost=None):
     start = int(h.get("idx", 0)) % n
     dirty = False
 
+    # ตัดวงจรก่อน: ทุก key ตายอยู่แล้ว → ไม่ต้องยิง ไม่ต้อง sleep
+    if not any(_key_alive(h, k) for k in API_KEYS):
+        return {}
+
     for rnd in range(2):  # 2 passes — pass 2 ให้โอกาส key ที่เพิ่งโดน 429 ชั่วคราว
         for attempt in range(n):
             idx = (start + attempt) % n
@@ -251,7 +261,13 @@ def yt_api(endpoint, params, _cost=None):
                     _mark_key(h, k, dead_for=30)
                     print(f"⚠️ YouTube {e.code} (key {k[:8]}…) → retry key อื่น")
                 else:
-                    # error จริงจากคำขอ (400 bad param ฯลฯ) — เปลี่ยน key ก็ไม่ช่วย
+                    # error จริงจากคำขอ — เปลี่ยน key ก็ไม่ช่วย
+                    if e.code in (400, 401) and "API key not valid" in body:
+                        # key ผิด/ถูกเพิกถอน → ตายทั้งวัน อย่าเสียเวลายิงซ้ำ
+                        _mark_key(h, k, dead_today=True)
+                        _save_health(h)
+                        print(f"⛔ key {k[:8]}… ใช้ไม่ได้ (invalid key) → ปิดถาวรวันนี้")
+                        continue
                     _save_health(h)
                     print(f"⚠️ API error {e.code} (key {k[:8]}…): {e.reason} {body[:120]}")
                     return {}
@@ -370,6 +386,8 @@ def check_if_live(video_ids_list):
     failed_ids = []
     for i in range(0, len(video_ids_list), 50):
         batch = video_ids_list[i:i+50]
+        if i:
+            time.sleep(0.3)  # กันยิงรัวจน YouTube ตอบ 429
         ids_str = ",".join(v["video_id"] for v in batch)
         result = yt_api("videos", {
             "part": "snippet,liveStreamingDetails",
@@ -381,10 +399,17 @@ def check_if_live(video_ids_list):
         all_items.extend(result.get("items", []))
 
     # Rescue pass: batch พังแต่ stream ตัวใหญ่ห้ามหาย → ยิงทีละตัว (1 unit)
+    # แต่ถ้าทุก key ตายอยู่แล้ว การยิงต่อไม่มีทางสำเร็จ — เสียเวลา + log ท่วม
     rescue = [v for v in failed_ids if _last_v(v) >= 500]
+    if rescue and not any_key_alive():
+        print(f"⛔ ข้าม rescue {len(rescue)} stream — ทุก key ตายอยู่ ({key_health_report()})")
+        rescue = []
     if rescue:
         print(f"🛟 rescue: batch fail — ยิงทีละตัว {len(rescue)} stream ใหญ่")
         for v in rescue:
+            if not any_key_alive():
+                print(f"  ⛔ key หมดกลางคัน — หยุด rescue (เหลือ {len(rescue) - rescue.index(v)} ตัว)")
+                break
             r = yt_api("videos", {
                 "part": "snippet,liveStreamingDetails",
                 "id": v["video_id"],
@@ -455,8 +480,13 @@ def check_if_live(video_ids_list):
             })
 
     live_streams.sort(key=lambda x: x["concurrent_viewers"], reverse=True)
-    # api_ok = รอบนี้ API ทำงานปกติไหม (ไม่มี batch fail ที่กู้ไม่ได้)
-    api_ok = not failed_ids or bool(all_items)
+    # api_ok = รอบนี้เก็บข้อมูลได้ครบไหม
+    # ต้องเป็น False ถ้ามี batch ไหนพัง — ไม่งั้น stream ใน batch ที่พังจะโดนนับ missed
+    # ทั้งที่เราแค่ "มองไม่เห็น" ไม่ใช่ "มันหายไปจริง"
+    unrecovered = {v["video_id"] for v in failed_ids} - {i["id"] for i in all_items}
+    api_ok = not unrecovered
+    if unrecovered:
+        print(f"⚠️ api_ok=False — {len(unrecovered)} stream มองไม่เห็นรอบนี้ (ไม่นับเป็น missed)")
     return live_streams, confirmed_ended, api_ok
 
 
