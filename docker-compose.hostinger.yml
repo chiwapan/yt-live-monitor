@@ -51,6 +51,33 @@ services:
       retries: 3
       start_period: 30s
 
+  # ── Views collector: batch รายวัน (Analytics API, OAuth) แยกจาก live monitor ──
+  views-collector:
+    build:
+      context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
+      dockerfile: Dockerfile.views
+    container_name: yt-views-collector
+    restart: unless-stopped
+    env_file:
+      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
+    environment:
+      - TZ=Asia/Bangkok
+      - VIEWS_JSONL=/data/views_data.jsonl
+      - VIEWS_LIVE_JSONL=/data/views_live.jsonl
+      - GAPI_SCRIPT=/app/google_api.py
+      - HERMES_HOME=/token
+      - CMS_ID=6tGFEVDsxneJqsVjifQvEA
+      - TOP_N=20
+      - VIEWS_LOOKBACK_DAYS=1
+    volumes:
+      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_data.jsonl:/data/views_data.jsonl
+      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_live.jsonl:/data/views_live.jsonl
+      - /docker/hermes-agent-r6gh/data/google_token.json:/token/google_token.json:ro
+      - /docker/hermes-agent-r6gh/data/google_client_secret.json:/token/google_client_secret.json:ro
+    command: >
+      sh -c "while true; do python yt-views-collector.py;
+      echo '[views] sleeping 24h'; sleep 86400; done"
+
   # Cloudflare tunnel — serve live.chiwapan.online -> localhost:8899
   # network_mode: host เห็น localhost:8899 ที่ web publish (เหมือน config เดิมใน Hermes)
   cloudflared:
