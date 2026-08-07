@@ -120,7 +120,7 @@ def query_channel_product(service, channel_id, start, end):
         "ids": ids,
         "startDate": start,
         "endDate": end,
-        "metrics": ("views,watchTimeMinutes,estimatedRevenue,subscribersGained,"
+        "metrics": ("views,estimatedMinutesWatched,estimatedRevenue,subscribersGained,"
                     "subscribersLost,averageViewDuration,impressions,impressionsClickThroughRate"),
         "dimensions": "youtubeProduct",
     }
@@ -134,7 +134,7 @@ def query_top_videos(service, channel_id, start, end, product):
         "ids": ids,
         "startDate": start,
         "endDate": end,
-        "metrics": "views,watchTimeMinutes",
+        "metrics": "views,estimatedMinutesWatched",
         "dimensions": "video",
         "filters": f"youtubeProduct=={product}",
         "sort": "-views",
