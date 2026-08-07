@@ -330,8 +330,8 @@ def views_monitor():
 
 @app.route("/api/views-data")
 def api_views_data():
-    """อ่าน views_data.jsonl (batch รายวัน) + views_live.jsonl (snapshot สด)
-    คืน JSON ให้หน้า views-monitor aggregate ฝั่ง JS"""
+    """อ่าน views_data.jsonl (batch รายวันจาก Analytics ถ้ามี) + views_live.jsonl (snapshot สด)
+    ถ้าไม่มี batch (CMS บล็อก) → คำนวณรายวันจาก snapshot history แทน (ไม่ต้อง CMS)"""
     def read_jsonl(path):
         if not os.path.exists(path):
             return []
@@ -349,16 +349,73 @@ def api_views_data():
 
     batch = read_jsonl(VIEWS_JSONL)
     live = read_jsonl(VIEWS_LIVE_JSONL)
-    # เวลาของ snapshot ล่าสุด
     last_live = live[-1]["ts"] if live else ""
     last_batch = batch[-1]["date"] if batch else ""
+
+    # ถ้าไม่มี batch จริง (CMS บล็อก) → สังเคราะห์รายวันจาก snapshot history
+    if not batch and live:
+        batch = compute_daily_from_snapshot(live)
+
     return jsonify({
         "batch": batch,          # channel-level + per-video (มี date, product)
         "live": live,            # snapshot สด (ts, video_id, view_count, is_short_est)
         "last_live": last_live,
         "last_batch": last_batch,
-        "channels": [c["name"] for c in CHANNELS] if False else None,
+        "channels": None,
     })
+
+
+def compute_daily_from_snapshot(live):
+    """คำนวณยอดวิวรายวันจาก snapshot history (view_count สะสมทุกชั่วโมง)
+    รายวัน[date][video] = view_count สุดท้ายของวัน − view_count สุดท้ายของวันก่อนหน้า
+    ถ้าไม่มีวันก่อน → เทียบกับ 0 (วิดีโอเพิ่งโพสต์)"""
+    from collections import defaultdict
+    # รวบรวม (video_id, date) -> (ts สุดท้าย, view_count สุดท้าย)
+    by_vid_date = defaultdict(dict)  # vid -> date -> (ts, vc)
+    meta = {}  # vid -> (channel_id, channel, title, is_short)
+    for r in live:
+        vid = r.get("video_id")
+        if not vid:
+            continue
+        d = r["ts"][:10]
+        ts = r["ts"]
+        vc = int(r.get("view_count", 0))
+        cur = by_vid_date[vid].get(d)
+        if cur is None or ts > cur[0]:
+            by_vid_date[vid][d] = (ts, vc)
+        meta[vid] = (r.get("channel_id"), r.get("channel"), r.get("title"), r.get("is_short_est"))
+
+    # วันทั้งหมดเรียงลำดับ
+    all_dates = sorted({d for vid in by_vid_date for d in by_vid_date[vid]})
+    # วันก่อนหน้าของแต่ละวัน
+    prev_date = {}
+    for i, d in enumerate(all_dates):
+        prev_date[d] = all_dates[i-1] if i > 0 else None
+
+    rows = []
+    for vid, dmap in by_vid_date.items():
+        cid, cname, title, is_short = meta[vid]
+        for d in dmap:
+            vc_today = dmap[d][1]
+            pd = prev_date[d]
+            vc_prev = 0
+            if pd and pd in dmap:
+                vc_prev = dmap[pd][1]
+            elif pd:
+                # หา vc วันก่อนจากวันไหนก็ได้ที่ < d (เอาแค่ก่อนสุด)
+                earlier = [dd for dd in dmap if dd < d]
+                if earlier:
+                    vc_prev = dmap[max(earlier)][1]
+            daily = max(0, vc_today - vc_prev)
+            rows.append({
+                "date": d, "channel_id": cid, "channel": cname,
+                "video_id": vid, "title": title or "",
+                "product": "SHORTS" if is_short else "CORE",
+                "views": daily,
+                "estimated_revenue": 0.0, "subs_gained": 0, "subs_lost": 0,
+                "avg_view_dur": 0, "watch_time_min": 0,
+            })
+    return rows
 
 
 @app.route("/")
