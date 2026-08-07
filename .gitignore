@@ -14,3 +14,4 @@ backfill_queue.done
 *.bak
 web/views_mockup.html
 yt-live-daily-state.json
+yt-key-health.json

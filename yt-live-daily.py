@@ -93,76 +93,164 @@ def floor_5min(dt):
 
 # ─── YouTube Data API (API key only, no OAuth needed for public data) ───
 
-def _kv_key_index():
-    """Load active key index from state file (module reloads every tick → persist)."""
+# ─── Key health tracking (แยกไฟล์จาก STATE_FILE — เขียนถี่, ไฟล์เล็ก, ไม่ race กับ state 90KB) ───
+#
+# ปัญหาเดิม (2026-08-07): key ที่ quota หมดยังถูกเรียกซ้ำทุก call → log ท่วม + เสียเวลา +
+# batch ที่โชคร้ายเจอ 429 ถูกทิ้งทั้งก้อน (live คนดูหลักหมื่นหายไปเฉยๆ)
+#
+# แก้ถาวร: จำสุขภาพราย key
+#   - 403 quotaExceeded  → dead ถึงเที่ยงคืน Pacific (YouTube reset quota ตอนนั้น)
+#   - 429 / rateLimit    → dead 120 วินาที (ชั่วคราว)
+#   - นับ units ที่ใช้ต่อ key ต่อวัน → ใช้ตัดสินว่าเหลือ budget พอทำ search (100 units) ไหม
+KEY_HEALTH_FILE = os.environ.get("KEY_HEALTH_FILE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "yt-key-health.json"))
+DAILY_QUOTA_PER_KEY = int(os.environ.get("DAILY_QUOTA_PER_KEY", "10000"))
+# กัน budget ไว้ให้ videos.list (งานหลัก) เสมอ — ห้าม search กินจนหมด
+POLL_RESERVE_UNITS = int(os.environ.get("POLL_RESERVE_UNITS", "1500"))
+PT = timezone(timedelta(hours=-8))  # Pacific (quota reset boundary)
+
+
+def _quota_day():
+    """วันของ quota window ตามเวลา Pacific (YouTube reset เที่ยงคืน PT)."""
+    return datetime.now(PT).strftime("%Y-%m-%d")
+
+
+def _load_health():
     try:
-        with open(STATE_FILE) as _f:
-            _s = json.load(_f)
-            return int(_s.get("_active_api_key_idx", 0))
+        with open(KEY_HEALTH_FILE) as f:
+            h = json.load(f)
     except Exception:
-        return 0
+        h = {}
+    if h.get("day") != _quota_day():
+        h = {"day": _quota_day(), "keys": {}, "idx": 0}
+    h.setdefault("keys", {})
+    h.setdefault("idx", 0)
+    return h
 
 
-def _kv_set_key_index(idx):
-    idx = idx % max(len(API_KEYS), 1)
+def _save_health(h):
     try:
-        with open(STATE_FILE) as _f:
-            _s = json.load(_f)
-        _s["_active_api_key_idx"] = idx
-        with open(STATE_FILE, "w") as _f:
-            json.dump(_s, _f)
+        tmp = KEY_HEALTH_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(h, f)
+        os.replace(tmp, KEY_HEALTH_FILE)
     except Exception:
         pass
-    return idx
 
 
-def yt_api(endpoint, params):
-    """Call YouTube Data API v3 with API key. Multi-key rotation on quotaExceeded (403).
-    แต่ละ key อยู่ project แยก → quota ต่างก้อน; สลับ key ต่อเนื่องทุก tick กันคว่ตรหมดก้อนเดียวตลอดวัน."""
+def _key_alive(h, k):
+    info = h["keys"].get(k, {})
+    return time.time() >= info.get("dead_until", 0)
+
+
+def _mark_key(h, k, *, dead_for=None, dead_today=False, units=0):
+    info = h["keys"].setdefault(k, {})
+    info["units"] = info.get("units", 0) + units
+    if dead_today:
+        # ตายจนกว่าจะข้ามวัน quota (เที่ยงคืน PT)
+        nxt = (datetime.now(PT) + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0)
+        info["dead_until"] = nxt.timestamp()
+        info["reason"] = "quotaExceeded"
+    elif dead_for:
+        info["dead_until"] = time.time() + dead_for
+        info["reason"] = "rateLimit"
+
+
+def quota_budget_left():
+    """หน่วย quota ที่ยังพอใช้ได้รวมทุก key (ประมาณจากที่นับไว้)."""
+    h = _load_health()
+    total = 0
+    for k in API_KEYS:
+        if not _key_alive(h, k):
+            continue
+        total += max(0, DAILY_QUOTA_PER_KEY - h["keys"].get(k, {}).get("units", 0))
+    return total
+
+
+def key_health_report():
+    h = _load_health()
+    out = []
+    for k in API_KEYS:
+        info = h["keys"].get(k, {})
+        used = info.get("units", 0)
+        alive = _key_alive(h, k)
+        state = "ok" if alive else f"dead({info.get('reason','?')})"
+        out.append(f"{k[:8]}…={used}u/{state}")
+    return " | ".join(out)
+
+
+# quota cost ต่อ endpoint (YouTube Data API v3)
+_UNIT_COST = {"videos": 1, "search": 100, "channels": 1, "playlistItems": 1}
+
+
+def yt_api(endpoint, params, _cost=None):
+    """Call YouTube Data API v3 พร้อม key rotation + health tracking + retry.
+
+    หลักการ (แก้ถาวร 2026-08-07):
+      1. ข้าม key ที่รู้อยู่แล้วว่าตาย (quota หมด / rate-limited) — ไม่เสียเวลายิงซ้ำ
+      2. transient error (429, 403 rateLimit, network, 5xx) → rotate + retry key อื่น
+         ทุกตัว ห้าม return {} ทิ้ง batch เด็ดขาด
+      3. วนครบทุก key แล้วยังไม่ได้ → พัก 2 วิ แล้ววนอีกรอบ (สูงสุด 2 รอบ)
+         เพราะ 429 เป็นของชั่วคราว มักหายใน 1-2 วินาที
+      4. นับ units ที่ใช้จริงต่อ key → ใช้ตัดสิน budget ของ search layer
+    """
     if not API_KEYS:
         params["key"] = ""
         return {}
+
+    cost = _cost if _cost is not None else _UNIT_COST.get(endpoint, 1)
+    h = _load_health()
     n = len(API_KEYS)
-    start = _kv_key_index() % n
-    for attempt in range(n):
-        idx = (start + attempt) % n
-        k = API_KEYS[idx]
-        params["key"] = k
-        url = f"https://www.googleapis.com/youtube/v3/{endpoint}?{urllib.parse.urlencode(params)}"
-        req = urllib.request.Request(url)
-        try:
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                # advance to next key so usage spreads across all projects each call
-                _kv_set_key_index(idx + 1)
-                return json.loads(resp.read())
-        except urllib.error.HTTPError as e:
-            body = ""
-            try:
-                body = e.read().decode()[:500]
-            except Exception:
-                pass
-            # 403 quotaExceeded / rateLimitExceeded และ 429 Too Many Requests
-            # ล้วนเป็น "key นี้ใช้ไม่ได้ตอนนี้" → ต้อง rotate ไป key ถัดไป ห้าม return {} ทิ้ง batch
-            # (bug 2026-08-07: 429 ทำให้ batch ที่มี live คนดูหลักหมื่นหายทั้งก้อน)
-            transient = (
-                e.code == 429
-                or (e.code == 403 and (
-                    "quotaExceeded" in body
-                    or "rateLimitExceeded" in body
-                    or "userRateLimitExceeded" in body
-                ))
-            )
-            if transient:
-                print(f"⚠️ key {k[:8]}… {e.code} ({'quota' if 'quota' in body else 'rate-limit'}) → rotate to next")
-                time.sleep(0.5)
+    start = int(h.get("idx", 0)) % n
+    dirty = False
+
+    for rnd in range(2):  # 2 passes — pass 2 ให้โอกาส key ที่เพิ่งโดน 429 ชั่วคราว
+        for attempt in range(n):
+            idx = (start + attempt) % n
+            k = API_KEYS[idx]
+            if not _key_alive(h, k):
                 continue
-            print(f"⚠️ API error {e.code} (key {k[:8]}…): {e.reason}")
-            return {}
-        except Exception as e:
-            print(f"⚠️ API error (key {k[:8]}…): {e} → rotate to next")
-            time.sleep(0.5)
-            continue
-    print("⛔ ทุก key quota หมดในรอบนี้ — ไม่เก็บข้อมูลตอนนี้")
+            params["key"] = k
+            url = f"https://www.googleapis.com/youtube/v3/{endpoint}?{urllib.parse.urlencode(params)}"
+            try:
+                with urllib.request.urlopen(urllib.request.Request(url), timeout=15) as resp:
+                    data = json.loads(resp.read())
+                _mark_key(h, k, units=cost)
+                h["idx"] = (idx + 1) % n
+                _save_health(h)
+                return data
+            except urllib.error.HTTPError as e:
+                body = ""
+                try:
+                    body = e.read().decode()[:500]
+                except Exception:
+                    pass
+                dirty = True
+                if e.code == 403 and "quotaExceeded" in body:
+                    _mark_key(h, k, dead_today=True, units=cost)
+                    print(f"⛔ key {k[:8]}… quota หมดวันนี้ → ปิดจนถึงเที่ยงคืน PT")
+                elif e.code == 429 or (e.code == 403 and "ateLimit" in body):
+                    _mark_key(h, k, dead_for=120, units=cost)
+                    print(f"⚠️ key {k[:8]}… rate-limited ({e.code}) → พัก 120 วิ")
+                elif 500 <= e.code < 600:
+                    _mark_key(h, k, dead_for=30)
+                    print(f"⚠️ YouTube {e.code} (key {k[:8]}…) → retry key อื่น")
+                else:
+                    # error จริงจากคำขอ (400 bad param ฯลฯ) — เปลี่ยน key ก็ไม่ช่วย
+                    _save_health(h)
+                    print(f"⚠️ API error {e.code} (key {k[:8]}…): {e.reason} {body[:120]}")
+                    return {}
+            except Exception as e:
+                dirty = True
+                _mark_key(h, k, dead_for=20)
+                print(f"⚠️ network error (key {k[:8]}…): {e} → retry key อื่น")
+        if rnd == 0:
+            time.sleep(2)
+
+    if dirty:
+        _save_health(h)
+    print(f"⛔ ทุก key ใช้ไม่ได้ในรอบนี้ [{endpoint}] — {key_health_report()}")
     return {}
 
 
@@ -243,14 +331,29 @@ def get_live_from_search():
 
 
 def check_if_live(video_ids_list):
-    """Check which videos are currently live using videos.list (1 unit/call)."""
+    """Check which videos are currently live using videos.list (1 unit/call).
+
+    ป้องกันข้อมูลหาย (แก้ถาวร 2026-08-07):
+      - เรียง video ตาม last_viewers มาก→น้อย ก่อนแบ่ง batch
+        → ถ้า quota ตายกลางคัน live ตัวใหญ่ (คนดูหลักหมื่น) ถูกเก็บไปแล้ว
+      - ถ้า batch ไหน fail → retry ทีละตัวเฉพาะ stream ตัวใหญ่ (>500 คนดู)
+        1 unit/ตัว ถูกมาก คุ้มกว่าปล่อยข้อมูล peak หาย
+    """
     if not video_ids_list:
         return []
 
-    channel_lookup = {v["video_id"]: v for v in video_ids_list}
+    state = load_state()
+    _streams = state.get("streams", {})
+
+    def _last_v(v):
+        return _streams.get(v["video_id"], {}).get("last_viewers", 0) or 0
+
+    # ตัวใหญ่ก่อนเสมอ — quota ตายกลางคันก็ยังได้ข้อมูลที่สำคัญที่สุด
+    video_ids_list = sorted(video_ids_list, key=_last_v, reverse=True)
 
     # Batch: YouTube API max 50 IDs per call
     all_items = []
+    failed_ids = []
     for i in range(0, len(video_ids_list), 50):
         batch = video_ids_list[i:i+50]
         ids_str = ",".join(v["video_id"] for v in batch)
@@ -258,12 +361,31 @@ def check_if_live(video_ids_list):
             "part": "snippet,liveStreamingDetails",
             "id": ids_str,
         })
+        if not result:
+            failed_ids.extend(batch)
+            continue
         all_items.extend(result.get("items", []))
 
-    # Load state to get last known viewers for fallback
-    state = load_state()
+    # Rescue pass: batch พังแต่ stream ตัวใหญ่ห้ามหาย → ยิงทีละตัว (1 unit)
+    rescue = [v for v in failed_ids if _last_v(v) >= 500]
+    if rescue:
+        print(f"🛟 rescue: batch fail — ยิงทีละตัว {len(rescue)} stream ใหญ่")
+        for v in rescue:
+            r = yt_api("videos", {
+                "part": "snippet,liveStreamingDetails",
+                "id": v["video_id"],
+            })
+            if r.get("items"):
+                all_items.extend(r["items"])
+            else:
+                print(f"  ✖ rescue fail: {v['video_id']} ({_last_v(v)} viewers ล่าสุด)")
+    if failed_ids and not rescue:
+        print(f"⚠️ {len(failed_ids)} video ไม่ถูก poll รอบนี้ (batch fail, ไม่มีตัวใหญ่)")
 
+    channel_lookup = {v["video_id"]: v for v in video_ids_list}
     live_streams = []
+    # เก็บว่า API ยืนยันตัวไหน "จบจริง" (มี actualEndTime) — ใช้มาร์ก ended แบบมั่นใจ
+    confirmed_ended = set()
     for item in all_items:
         live_details = item.get("liveStreamingDetails", {})
         snippet = item.get("snippet", {})
@@ -272,6 +394,9 @@ def check_if_live(video_ids_list):
         concurrent = live_details.get("concurrentViewers")
         actual_end = live_details.get("actualEndTime")
         broadcast = snippet.get("liveBroadcastContent")
+
+        if actual_end:
+            confirmed_ended.add(vid)
 
         # PREMIERE / NON-LIVE DETECTION:
         # A YouTube Premiere sets liveBroadcastContent="live" during the event, but the
@@ -316,7 +441,9 @@ def check_if_live(video_ids_list):
             })
 
     live_streams.sort(key=lambda x: x["concurrent_viewers"], reverse=True)
-    return live_streams
+    # api_ok = รอบนี้ API ทำงานปกติไหม (ไม่มี batch fail ที่กู้ไม่ได้)
+    api_ok = not failed_ids or bool(all_items)
+    return live_streams, confirmed_ended, api_ok
 
 
 # ─── State Management (peak tracking) ───
@@ -334,10 +461,24 @@ def save_state(state):
         json.dump(state, f, indent=2)
 
 
-def update_stream_state(state, live_streams, cron_now):
-    """Update peak viewers for each tracked stream."""
+def update_stream_state(state, live_streams, cron_now, api_ok=True, confirmed_ended=None):
+    """Update peak viewers for each tracked stream.
+
+    การมาร์ก ended (แก้ถาวร 2026-08-07):
+      บั๊กเดิม — poll พลาดเพราะ 429/quota → หายจาก current_ids → ครบ 10 นาที
+      ระบบมาร์ก ended:True → ตัดออกจาก polling **ถาวร** ทั้งที่ยัง live อยู่
+      (x37jys4xbDw คนดู 12,800 ถูกตัดทิ้งตอน 16:40)
+
+    กติกาใหม่:
+      1. ended ทันที เฉพาะเมื่อ API ยืนยัน actualEndTime (confirmed_ended) — แม่นยำ 100%
+      2. ถ้าแค่ "ไม่เจอ" → ต้อง api_ok (รอบนั้น API ทำงานปกติ) และหายติดกัน
+         >= MISS_TICKS_TO_END ticks ถึงจะมาร์ก — รอบที่ API พังไม่นับเป็น miss
+      3. stream ที่เคย ended แล้วโผล่มา live อีก → ปลุกคืน (ended=False)
+    """
     now_str = cron_now.strftime("%Y-%m-%d %H:%M:%S")
     current_ids = {s["video_id"] for s in live_streams}
+    confirmed_ended = confirmed_ended or set()
+    MISS_TICKS_TO_END = 6  # 6 tick × 5 นาที = 30 นาที ของการหายจริง
 
     for stream in live_streams:
         vid = stream["video_id"]
@@ -362,16 +503,33 @@ def update_stream_state(state, live_streams, cron_now):
             existing["samples"].append(stream["concurrent_viewers"])
             if len(existing["samples"]) > 300:
                 existing["samples"] = existing["samples"][-300:]
+            # ปลุกคืน: เคยถูกมาร์ก ended ผิดๆ แต่ยัง live จริง
+            if existing.get("ended"):
+                print(f"🔁 resurrect: {vid} ({existing.get('title','')[:40]}) ยัง live อยู่ — ยกเลิก ended")
+                existing["ended"] = False
+                existing.pop("end_time", None)
+        state["streams"][vid]["missed"] = 0
 
-    # Mark ended streams (>10 min since last seen)
+    # Mark ended
     for vid in list(state["streams"].keys()):
-        if vid not in current_ids:
-            existing = state["streams"][vid]
-            last_seen = datetime.strptime(existing["last_seen"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=ICT)
-            elapsed = (cron_now - last_seen).total_seconds()
-            if elapsed > 600:
-                existing["ended"] = True
-                existing["end_time"] = existing["last_seen"]
+        if vid in current_ids:
+            continue
+        existing = state["streams"][vid]
+        if existing.get("ended"):
+            continue
+        if vid in confirmed_ended:
+            existing["ended"] = True
+            existing["end_time"] = existing.get("last_seen", now_str)
+            print(f"🏁 {vid} จบจริง (API ยืนยัน actualEndTime)")
+            existing["ended_confirmed"] = True
+            continue
+        if not api_ok:
+            # รอบนี้ API พัง — ไม่นับเป็นการหาย ห้ามมาร์ก ended
+            continue
+        existing["missed"] = existing.get("missed", 0) + 1
+        if existing["missed"] >= MISS_TICKS_TO_END:
+            existing["ended"] = True
+            existing["end_time"] = existing.get("last_seen", now_str)
 
     return state
 
@@ -568,6 +726,7 @@ def main():
 
     now = floor_5min(datetime.now(ICT))
     print(f"🔍 YT Live Monitor — {now.strftime('%Y-%m-%d %H:%M:%S')} ICT")
+    print(f"🔑 keys: {key_health_report()} (budget เหลือ ~{quota_budget_left()}u)")
 
     # 1. Discover from RSS
     rss_videos = get_live_from_rss()
@@ -587,6 +746,14 @@ def main():
             do_search = True
     else:
         do_search = True
+
+    if do_search:
+        # Budget guard: search = 100 units/ช่อง — ห้ามกิน quota ที่ videos.list ต้องใช้
+        need = len(SEARCH_CHANNEL_IDS) * 100
+        left = quota_budget_left()
+        if left < need + POLL_RESERVE_UNITS:
+            print(f"  ⛽ skip live-search — quota เหลือ {left}u ต้องกัน {POLL_RESERVE_UNITS}u ให้ polling")
+            do_search = False
 
     if do_search:
         # per-channel search เฉพาะ 6 ช่องหลัก (100 units/ช่อง) throttle 2 ชม
@@ -609,8 +776,20 @@ def main():
     rss_ids = {v["video_id"] for v in rss_videos}
     ch_lookup = {c["id"]: c["name"] for c in CHANNELS}
     for vid, s in state_pre.get("streams", {}).items():
-        if vid in rss_ids or s.get("ended"):
+        if vid in rss_ids:
             continue
+        # ended ที่ API ยืนยันแล้ว → เลิก poll จริง
+        # ended จาก miss-count → poll ต่ออีก 2 ชม (grace) เผื่อมาร์กผิดจาก quota
+        if s.get("ended"):
+            if s.get("ended_confirmed"):
+                continue
+            try:
+                et = datetime.strptime(s.get("end_time", ""), "%Y-%m-%d %H:%M:%S").replace(tzinfo=ICT)
+                if (now - et).total_seconds() > 7200:
+                    continue
+            except Exception:
+                continue
+            print(f"🩺 grace-poll: {vid} ({s.get('title','')[:35]}) — ended แบบไม่ยืนยัน ตรวจซ้ำ")
         # หา channel_id จาก name
         ch_id = next((c["id"] for c in CHANNELS if c["name"] == s.get("channel")), "")
         rss_videos.append({
@@ -622,12 +801,12 @@ def main():
         print(f"📌 state-persist: {vid} ({s.get('title','')[:40]}) — not in RSS, still polling")
 
     # 2. Check which are live
-    live_streams = check_if_live(rss_videos)
+    live_streams, confirmed_ended, api_ok = check_if_live(rss_videos)
 
     if not live_streams:
         print("ℹ️ No live streams right now — silent exit")
         state = load_state()
-        update_stream_state(state, [], now)
+        update_stream_state(state, [], now, api_ok=api_ok, confirmed_ended=confirmed_ended)
         summary_rows, peak_rows = generate_daily_summary(state, now)
         if summary_rows:
             setup_sheet_tabs()
@@ -648,7 +827,7 @@ def main():
 
     # 3. Update state
     state = load_state()
-    update_stream_state(state, live_streams, now)
+    update_stream_state(state, live_streams, now, api_ok=api_ok, confirmed_ended=confirmed_ended)
 
     # 4. Append raw data
     raw_rows = []
