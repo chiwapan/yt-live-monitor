@@ -110,7 +110,7 @@ def get_analytics_service():
 
 def ids_param(channel_id):
     if CMS_ID:
-        return f"contentOwner=={CMS_ID}", {"onBehalfOfContentOwner": CMS_ID}
+        return f"contentOwner=={CMS_ID}", {}
     return f"channel=={channel_id}", {}
 
 
