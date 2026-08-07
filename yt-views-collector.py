@@ -414,6 +414,7 @@ def collect_channel_totals():
 
 def write_channel_totals(path, rows):
     if not rows:
+        print("⚠️ channel_totals: ไม่มีข้อมูลรอบนี้ (อาจโดน 403 หมด) → ข้าม ไม่เขียนทับไฟล์เดิม")
         return
     # merge กับของเดิม (เขียนทับเฉพาะช่องที่ได้รอบนี้) → รันซ้ำทีละช่องไม่หาย
     existing = {}
