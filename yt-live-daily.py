@@ -144,6 +144,7 @@ SEARCH_CHANNEL_IDS = [
     "UCtBu8Wb2BUoduUXJS9Uss7Q",  # ช่อง8 Thai Ch8
     "UCq2_AaNWBd0kxzR1HL2yhsw",  # terodigital
     "UC7FCQJFK1sfwD_uobB45Xng",  # PPTV HD 36
+    "UCk1v3FzlMu3r34LYgoHpH2w",  # THE STANDARD
 ]
 
 def get_live_from_search():
@@ -226,6 +227,15 @@ def check_if_live(video_ids_list):
                 continue
 
         if concurrent is not None:
+            title = snippet.get("title", "")
+            # FULL / REPLAY / PREMIERE FILTER:
+            # YouTube sometimes returns concurrentViewers>0 for a full-replay or
+            # premiere-styled VOD that is NOT a real live broadcast. These pollute
+            # the ranking/summary/dashboard with fake rows. Drop them by title pattern.
+            _JUNK = ("FULL", "REPLAY", "PREMIERE", "Premiere", "Replay", "full", "replay", "premiere")
+            if any(j in title for j in _JUNK):
+                print(f"🗑️ {vid}: non-live VOD ('{title[:40]}') — skipped.")
+                continue
             ch_info = channel_lookup.get(vid, {"channel_name": "Unknown", "channel_id": ""})
             live_streams.append({
                 "video_id": vid,
