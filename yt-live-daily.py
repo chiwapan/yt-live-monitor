@@ -69,6 +69,7 @@ CHANNELS = [
     {"id": "UCv1QMOzm4RPDtm8-JchAkkw", "name": "SiroteTalk"},
     {"id": "UCDI9EEC4ZstO4v-Sg8vlfBQ", "name": "อาร์ท เอกรัฐ"},
     {"id": "UCOFvLl4bKwCIZg0r4EBQLug", "name": "ThaiPBSNews"},
+    {"id": "UCMtFuOVbM_T43hYLnRA4MEA", "name": "Ejan : อีจัน"},
 ]
 
 ICT = timezone(timedelta(hours=7))
@@ -145,6 +146,7 @@ SEARCH_CHANNEL_IDS = [
     "UCq2_AaNWBd0kxzR1HL2yhsw",  # terodigital
     "UC7FCQJFK1sfwD_uobB45Xng",  # PPTV HD 36
     "UCk1v3FzlMu3r34LYgoHpH2w",  # THE STANDARD
+    "UCMtFuOVbM_T43hYLnRA4MEA",  # Ejan : อีจัน
 ]
 
 def get_live_from_search():
