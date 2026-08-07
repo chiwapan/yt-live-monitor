@@ -38,6 +38,26 @@ API_KEYS = [k.strip() for k in os.environ.get("YOUTUBE_API_KEYS", "").split(",")
 if not API_KEYS and API_KEY:
     API_KEYS = [API_KEY]
 API_KEYS = list(dict.fromkeys(API_KEYS))  # dedupe รักษาลำดับ
+
+# ⚠️ SAFETY — ป้องกัน dev/test เผา quota ของโปรดักชัน (อุบัติเหตุ 2026-08-07)
+# รันเป็น "production collector" แท้ต้องผ่าน container entrypoint (run_collector.py)
+# ซึ่ง set YT_LIVE_PRODUCTION=1. ถ้ารันจาก host เพื่องาน dev/test โดยไม่ได้ตั้งใจ
+# (เช่น `python3 yt-live-daily.py` ตรงๆ) → บล็อก ไม่ยอมใช้ key จริงใน .env
+# ต้องการรัน live ด้วย key จริงนอก container จริงๆ → YT_LIVE_PRODUCTION=1 python3 ...
+_IS_DEV_RUN = os.environ.get("YT_LIVE_PRODUCTION", "") != "1"
+# DEMO/TEST MODE — module global (document the decision, independent of env ที่ถูก mutate)
+# บังคับเปิดเมื่อ dev โดน guard; เปิดเองได้ผ่าน YT_DEMO_MODE=1 (offline test)
+DEMO_MODE = os.environ.get("YT_DEMO_MODE") == "1"
+if _IS_DEV_RUN and API_KEYS and not os.environ.get("YT_LIVE_DEV_KEYS"):
+    _probe_dev = os.environ.get("STATE_FILE", "")
+    if not _probe_dev or "projects/yt-live-monitor" in _probe_dev:
+        # ดูเหมือนจะรันจาก repo ของโปรดักชัน ไม่ใช่ config ทดสอบ
+        # ห้ามใช้ key จริง — บอกให้ใช้อันทดสอบ mock แทน
+        API_KEYS = ["YT_LIVE_TEST_KEY_ONLY"]  # key ปลอมชัดเจน ห้ามใช้จริง
+        DEMO_MODE = True
+        print("🚧 SAFETY: รัน dev/test (ไม่ผ่าน container) — ห้ามใช้ key จริง")
+        print("   ใช้ key ปลอม + mock ไปก่อน ถ้าอยากรัน live จริงนอก container:")
+        print("   YT_LIVE_PRODUCTION=1 python3 yt-live-daily.py  (ระวัง quota)")
 SHEET_ID = os.environ.get("YT_SHEET_ID", "")
 GAPI_SCRIPT = os.environ.get("GAPI_SCRIPT",
     "/opt/data/skills/productivity/google-workspace/scripts/google_api.py")
@@ -215,6 +235,31 @@ def yt_api(endpoint, params, _cost=None):
          เพราะ 429 เป็นของชั่วคราว มักหายใน 1-2 วินาที
       4. นับ units ที่ใช้จริงต่อ key → ใช้ตัดสิน budget ของ search layer
     """
+    # 🧪 DEMO/TEST MODE — ตรวจก่อน !API_KEYS ปิด (demo mock ไม่ต้องใช้ key)
+    # บังคับตอนรัน dev กันเผา quota โปรดักชัน (อุบัติเหตุ 2026-08-07)
+    if DEMO_MODE:
+        if endpoint == "videos":
+            ids = [i for i in params.get("id", "").split(",") if i]
+            items = []
+            n = 0
+            for vid in ids[:3]:  # จำกัด สุ่ม 3 ตัวพอให้ test ผ่าน
+                n += 1
+                items.append({
+                    "kind": "youtube#video",
+                    "id": vid,
+                    "snippet": {"title": f"demo live {n}", "liveBroadcastContent": "live",
+                                "channelTitle": "demo"},
+                    "liveStreamingDetails": {"concurrentViewers": str(100 * n),
+                                             "actualStartTime": "2026-08-07T00:00:00Z"},
+                })
+            # ปิด 1 รายการ (มี actualEndTime) เพื่อ test จบจริง
+            if items:
+                items[0]["liveStreamingDetails"] = {"actualEndTime": "2026-08-07T12:00:00Z"}
+            return {"kind": "youtube#videoListResponse", "items": items}
+        if endpoint == "search":
+            return {"kind": "youtube#searchListResponse", "items": []}
+        return {}
+
     if not API_KEYS:
         params["key"] = ""
         return {}
@@ -289,6 +334,13 @@ def yt_api(endpoint, params, _cost=None):
 
 def get_live_from_rss():
     """Check all channel RSS feeds for recent videos (0 quota cost)."""
+    # 🧪 DEMO MODE — offline ไม่ยิง network (RSS จริง 0 quota แต่ dev ควรให้ปลอดภัย/เร็ว)
+    if DEMO_MODE:
+        return [
+            {"video_id": f"demo{r:02d}", "title": f"demo live {r}", "channel_id": "",
+             "channel_name": "demo"}
+            for r in range(3)
+        ]
     all_videos = []
     for ch in CHANNELS:
         rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={ch['id']}"
@@ -812,7 +864,7 @@ def append_local_jsonl(live_streams, now):
 # ─── Main ───
 
 def main():
-    if not API_KEYS:
+    if not API_KEYS and not DEMO_MODE:
         print("⚠️ YOUTUBE_API_KEY / YOUTUBE_API_KEYS not set")
         sys.exit(1)
     # SHEET_ID ไม่บังคับแล้ว — ถ้าไม่ตั้ง = ไม่ export Sheets (JSONL เป็น database หลัก)

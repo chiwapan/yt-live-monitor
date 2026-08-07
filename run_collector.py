@@ -16,6 +16,11 @@ INTERVAL = 300  # 5 min
 
 def tick():
     print(f"[{datetime.now(ICT).strftime('%Y-%m-%d %H:%M:%S')} ICT] collector tick", flush=True)
+    # ⚠️ SAFETY: บอก yt-live-daily.py ว่าตอนนี้คือ "production collector" จริง
+    # ตัว yt-live-daily.py ใช้ค่านี้ตัดสินว่าจะยอมใช้ key จริงใน .env หรือไม่
+    # ถ้ารันจาก host (ไม่ได้ผ่าน container entrypoint นี้) → มันจะไม่แตะ key จริง/env
+    # กันกรณี dev/test ไปเผา quota ของโปรดักชัน (อุบัติเหตุ 2026-08-07)
+    os.environ["YT_LIVE_PRODUCTION"] = "1"
     try:
         # ไฟล์ชื่อ yt-live-daily.py (hyphen) → import เป็น module ปกติไม่ได้ ต้องโหลดผ่าน path
         import importlib.util
