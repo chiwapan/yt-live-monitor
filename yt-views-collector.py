@@ -322,6 +322,87 @@ def upsert_jsonl(path, rows):
     print(f"✅ {path}: +{added} ใหม่, upsert {len(rows)-added} วันที่มีอยู่")
 
 
+def collect_channel_totals():
+    """Backfill: ดึงคลิปทั้งหมดใน uploads playlist ของแต่ละช่อง → บวก viewCount สะสม
+    แยก CORE/SHORTS ตาม duration (<60s = short) → ได้ยอดสะสมช่องคร่าวๆ ย้อนหลังได้
+    (ไม่พึ่ง Analytics CMS) รันครั้งเดียว พอ ไม่ใส่ loop"""
+    if not API_KEY:
+        print("⚠️ channel_totals ต้องมี YOUTUBE_API_KEY")
+        return []
+    import urllib.request
+    from urllib.parse import urlencode
+    rows = []
+    now = datetime.now(ICT).strftime("%Y-%m-%d %H:%M:%S")
+    for ch in CHANNELS:
+        try:
+            pid = _get_uploads_playlist(ch["id"])
+            # ดึงคลิปทั้งหมดใน uploads (loop ทุก page)
+            vids = []
+            page = None
+            page_no = 0
+            while True:
+                params = {"part": "contentDetails", "playlistId": pid,
+                          "maxResults": 50, "key": API_KEY}
+                if page:
+                    params["pageToken"] = page
+                purl = "https://www.googleapis.com/youtube/v3/playlistItems?" + urlencode(params)
+                with urllib.request.urlopen(purl, timeout=20) as r:
+                    pdata = json.loads(r.read())
+                for it in pdata.get("items", []):
+                    vid = it.get("contentDetails", {}).get("videoId")
+                    if vid:
+                        vids.append(vid)
+                page = pdata.get("nextPageToken")
+                page_no += 1
+                print(f"  … {ch['name']}: ดึงคลิปหน้า {page_no} ({len(vids)} วิดีโอแล้ว)", flush=True)
+                if not page:
+                    break
+            if not vids:
+                continue
+            # ดึง statistics + duration ทีละ 50 (videos.list)
+            total_views = 0
+            core_views = 0
+            short_views = 0
+            n_core = 0
+            n_short = 0
+            for i in range(0, len(vids), 50):
+                batch = vids[i:i+50]
+                vurl = "https://www.googleapis.com/youtube/v3/videos?" + urlencode({
+                    "part": "contentDetails,statistics", "id": ",".join(batch),
+                    "key": API_KEY})
+                with urllib.request.urlopen(vurl, timeout=20) as r:
+                    vdata = json.loads(r.read())
+                for it in vdata.get("items", []):
+                    vc = int(it.get("statistics", {}).get("viewCount", 0))
+                    dur = it.get("contentDetails", {}).get("duration", "")
+                    is_short = dur.startswith("PT") and "M" not in dur.split("T")[1] and "0S" in dur
+                    total_views += vc
+                    if is_short:
+                        short_views += vc; n_short += 1
+                    else:
+                        core_views += vc; n_core += 1
+            rows.append({
+                "ts": now, "channel_id": ch["id"], "channel": ch["name"],
+                "total_views": total_views,
+                "core_views": core_views, "short_views": short_views,
+                "n_core": n_core, "n_short": n_short,
+                "n_videos": len(vids),
+            })
+            print(f"  ✓ {ch['name']}: {total_views:,} วิว ({n_core} core + {n_short} short)")
+        except Exception as e:
+            print(f"⚠️ channel_totals {ch['name']}: {e}")
+    return rows
+
+
+def write_channel_totals(path, rows):
+    if not rows:
+        return
+    with open(path, "w") as f:
+        for r in rows:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    print(f"✅ channel_totals +{len(rows)} ช่อง → {path}")
+
+
 def append_snapshot(path, rows):
     if not rows:
         return
@@ -358,6 +439,16 @@ def main():
         if SHEET_ID:
             sheets_append("Views_Live", rows)
         print("✅ snapshot done")
+        return
+
+    if MODE == "totals":
+        # backfill ครั้งเดียว: ยอดสะสมช่อง (ไม่พึ่ง CMS)
+        if not API_KEY:
+            print("⚠️ ต้องตั้ง YOUTUBE_API_KEY สำหรับ totals mode")
+            sys.exit(1)
+        rows = collect_channel_totals()
+        write_channel_totals(os.path.join(os.path.dirname(VIEWS_LIVE_JSONL), "channel_totals.jsonl"), rows)
+        print("✅ channel_totals done")
         return
 
     # MODE = batch
