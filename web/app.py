@@ -76,10 +76,7 @@ SLOTS = [
         {"name": "ThaiRath News · สดไทยรัฐ", "channel": "ThaiRath News", "kw": ["สดไทยรัฐ"]},
         {"name": "ข่าวช่อง8 · สดสด", "channel": "ข่าวช่อง8", "kw": ["สดสด"]},
         {"name": "Amarin TV · สดอมรินทร์", "channel": "Amarin TV", "kw": ["สดอมรินทร์"]},
-    ]},
-    {"name": "โหนกระแส", "programs": [
-        {"name": "โหนกระแส · รายการหลัก", "channel": "โหนกระแส", "kw": ["🔴LIVE โหนกระแส", "LIVE โหนกระแส"]},
-        {"name": "โหนกระแส · Live Report", "channel": "โหนกระแส", "kw": ["Live "]},
+        {"name": "โหนกระแส · Live", "channel": "โหนกระแส", "kw": ["Live "]},
     ]},
     {"name": "รายการ Talk", "programs": [
         {"name": "ThaiRath News · NEWSROOM", "channel": "ThaiRath News", "kw": ["NEWSROOM", "นิวส์รูม"]},
