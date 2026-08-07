@@ -238,7 +238,13 @@ function buildRows(){
     // snapshot: แต่ละแถว = video สด ของช่องนั้น (view_count สะสม)
     // หา "อันดับ 1 ปัจจุบัน" ต่อช่อง = video แรกในลิสต์ (เรียงจากใหม่สุด)
     const byCh = {};
+    // dedupe: เอาแค่แถวล่าสุดของแต่ละ video_id (snapshot เก็บทุกชั่วโมง → วิดีโอคงเดิมมีซ้ำ)
+    const latestByVid = {};
     RAW.live.forEach(r=>{
+      const key = r.video_id;
+      if(!(key in latestByVid) || (r.ts||'') > (latestByVid[key].ts||'')) latestByVid[key]=r;
+    });
+    Object.values(latestByVid).forEach(r=>{
       if(!(r.channel_id in byCh)) byCh[r.channel_id]=[];
       byCh[r.channel_id].push(r);
     });
