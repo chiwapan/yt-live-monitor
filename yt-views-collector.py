@@ -324,20 +324,21 @@ def upsert_jsonl(path, rows):
 
 
 def collect_channel_totals():
-    """Backfill: ดึงคลิปทั้งหมดใน uploads playlist ของแต่ละช่อง → บวก viewCount สะสม
+    """Backfill: ดึงคลิปที่โพสต์หลัง TOTALS_SINCE ของแต่ละช่อง → บวก viewCount สะสม
     แยก CORE/SHORTS ตาม duration (<60s = short) → ได้ยอดสะสมช่องคร่าวๆ ย้อนหลังได้
-    (ไม่พึ่ง Analytics CMS) รันครั้งเดียว พอ ไม่ใส่ loop"""
+    (ไม่พึ่ง Analytics CMS) รันครั้งเดียว พอ ไม่ใส่ loop
+    มี delay + retry ป้องกัน API key โดน rate-limit 403"""
     if not API_KEY:
         print("⚠️ channel_totals ต้องมี YOUTUBE_API_KEY")
         return []
-    import urllib.request
+    import urllib.request, urllib.error, time
     from urllib.parse import urlencode
     rows = []
     now = datetime.now(ICT).strftime("%Y-%m-%d %H:%M:%S")
     for ch in CHANNELS:
         try:
             pid = _get_uploads_playlist(ch["id"])
-            # ดึงคลิปล่าสุด แล้วกรองเอาแค่โพสต์หลัง TOTALS_SINCE (default 2026-07-01)
+            # ดึงคลิปล่าสุด แล้วกรองเอาแค่โพสต์หลัง TOTALS_SINCE
             vids = []          # (video_id, publishedAt)
             page = None
             page_no = 0
@@ -355,17 +356,17 @@ def collect_channel_totals():
                     pub = it.get("contentDetails", {}).get("videoPublishedAt", "")
                     if vid:
                         scanned += 1
-                        if pub >= TOTALS_SINCE:   # ISO string compare works for dates
+                        if pub >= TOTALS_SINCE:
                             vids.append((vid, pub))
                 page = pdata.get("nextPageToken")
                 page_no += 1
                 print(f"  … {ch['name']}: หน้า {page_no} สแกน {scanned} คลิป, หลัง {TOTALS_SINCE}: {len(vids)}", flush=True)
-                # ถ้าเจอคลิปเก่าสุดในหน้านี้แล้ว (< SINCE) → หน้าถัดไปก็จะเก่ากว่านี้ทั้งหมด → หยุด
                 if not page or (pdata.get("items") and pdata["items"][-1].get("contentDetails", {}).get("videoPublishedAt", "") < TOTALS_SINCE):
                     break
+                time.sleep(0.5)   # นิ่มเครื่องระหว่างหน้า
             if not vids:
                 continue
-            # ดึง statistics + duration ทีละ 50 (videos.list)
+            # ดึง statistics + duration ทีละ 50 (videos.list) พร้อม retry ถ้า 403
             total_views = 0
             core_views = 0
             short_views = 0
@@ -376,8 +377,17 @@ def collect_channel_totals():
                 vurl = "https://www.googleapis.com/youtube/v3/videos?" + urlencode({
                     "part": "contentDetails,statistics", "id": ",".join(batch),
                     "key": API_KEY})
-                with urllib.request.urlopen(vurl, timeout=20) as r:
-                    vdata = json.loads(r.read())
+                for attempt in range(3):
+                    try:
+                        with urllib.request.urlopen(vurl, timeout=20) as r:
+                            vdata = json.loads(r.read())
+                        break
+                    except urllib.error.HTTPError as he:
+                        if he.code == 403 and attempt < 2:
+                            print(f"  ⏳ 403 rate-limit {ch['name']} หน่วง 60s (ลอง {attempt+1}/3)", flush=True)
+                            time.sleep(60)
+                        else:
+                            raise
                 for it in vdata.get("items", []):
                     vc = int(it.get("statistics", {}).get("viewCount", 0))
                     dur = it.get("contentDetails", {}).get("duration", "")
@@ -398,16 +408,32 @@ def collect_channel_totals():
             print(f"  ✓ {ch['name']}: {total_views:,} วิว จากคลิป {len(vids)} ตัว (โพสต์หลัง {TOTALS_SINCE})")
         except Exception as e:
             print(f"⚠️ channel_totals {ch['name']}: {e}")
+        time.sleep(2)   # นิ่มเครื่องระหว่างช่อง ป้องกัน 403
     return rows
 
 
 def write_channel_totals(path, rows):
     if not rows:
         return
+    # merge กับของเดิม (เขียนทับเฉพาะช่องที่ได้รอบนี้) → รันซ้ำทีละช่องไม่หาย
+    existing = {}
+    if os.path.exists(path):
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                    existing[r["channel_id"]] = r
+                except Exception:
+                    continue
+    for r in rows:
+        existing[r["channel_id"]] = r
     with open(path, "w") as f:
-        for r in rows:
+        for r in existing.values():
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    print(f"✅ channel_totals +{len(rows)} ช่อง → {path}")
+    print(f"✅ channel_totals +{len(rows)} ช่อง (รวม {len(existing)} ในไฟล์) → {path}")
 
 
 def append_snapshot(path, rows):
