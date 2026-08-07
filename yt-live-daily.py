@@ -255,8 +255,9 @@ def yt_api(endpoint, params, _cost=None):
                     _mark_key(h, k, dead_today=True, units=cost)
                     print(f"⛔ key {k[:8]}… quota หมดวันนี้ → ปิดจนถึงเที่ยงคืน PT")
                 elif e.code == 429 or (e.code == 403 and "ateLimit" in body):
-                    _mark_key(h, k, dead_for=120, units=cost)
-                    print(f"⚠️ key {k[:8]}… rate-limited ({e.code}) → พัก 120 วิ")
+                    # 45 วิ — สั้นกว่า tick interval (5 นาที) เพื่อให้ฟื้นทัน tick หน้า
+                    _mark_key(h, k, dead_for=45, units=cost)
+                    print(f"⚠️ key {k[:8]}… rate-limited ({e.code}) → พัก 45 วิ")
                 elif 500 <= e.code < 600:
                     _mark_key(h, k, dead_for=30)
                     print(f"⚠️ YouTube {e.code} (key {k[:8]}…) → retry key อื่น")
@@ -338,9 +339,14 @@ def get_live_from_search():
     จำกัดช่องเพื่อประหยัด quota; เรียกทุก 2 ชม ผ่าน throttle ใน main."""
     wanted = {c["id"]: c["name"] for c in CHANNELS}
     hits = []
-    for ch_id in SEARCH_CHANNEL_IDS:
+    for n_done, ch_id in enumerate(SEARCH_CHANNEL_IDS):
         if ch_id not in wanted:
             continue
+        if not any_key_alive():
+            print(f"  ⛔ หยุด live-search — key หมดกลางคัน (ทำไป {n_done} ช่อง)")
+            break
+        if n_done:
+            time.sleep(1.0)  # search หนัก — เว้นจังหวะกัน 429 จาก QPS
         result = yt_api("search", {
             "part": "snippet",
             "channelId": ch_id,
@@ -820,8 +826,10 @@ def main():
     rss_videos = get_live_from_rss()
     print(f"📡 RSS: found {len(rss_videos)} recent videos")
 
-    # 1a. Live-Search layer — กัน live หลุดจาก RSS top-15 (ช่องที่ upload ถี่มาก)
-    #     Search API = 100 units/call หนักมาก → จำกัดให้รันทุก 15 นาที (ทุก 3 tick)
+    # 1a. Live-Search layer — ตัดสินใจตอนนี้ แต่ "รันทีหลัง" (หลัง polling เสร็จ)
+    #     เหตุผล (แก้ 2026-08-07): search = 100 units/ช่อง ยิงก่อน polling ทำให้ key
+    #     โดน rate-limit ตั้งแต่ยังไม่ได้เก็บข้อมูลเลย → งานหลักพังเพราะงานเสริม
+    #     ลำดับที่ถูก: เก็บข้อมูล (งานหลัก, 1 unit/batch) ก่อนเสมอ แล้วค่อย discover
     state_pre = load_state()
     last_search = state_pre.get("last_live_search_ts", "")
     do_search = False
@@ -829,35 +837,12 @@ def main():
         try:
             from datetime import datetime as _dt
             last_dt = _dt.strptime(last_search, "%Y-%m-%d %H:%M:%S")
-            do_search = (now - last_dt).total_seconds() >= 7200  # 2 ชม (6 ช่อง × 100 = 600 units/ครั้ง)
+            do_search = (now - last_dt).total_seconds() >= 7200  # 2 ชม
         except Exception:
             do_search = True
     else:
         do_search = True
-
-    if do_search:
-        # Budget guard: search = 100 units/ช่อง — ห้ามกิน quota ที่ videos.list ต้องใช้
-        need = len(SEARCH_CHANNEL_IDS) * 100
-        left = quota_budget_left()
-        if left < need + POLL_RESERVE_UNITS:
-            print(f"  ⛽ skip live-search — quota เหลือ {left}u ต้องกัน {POLL_RESERVE_UNITS}u ให้ polling")
-            do_search = False
-
-    if do_search:
-        # per-channel search เฉพาะ 6 ช่องหลัก (100 units/ช่อง) throttle 2 ชม
-        search_videos = get_live_from_search()
-        print(f"🔎 live-search: found {len(search_videos)} live ในช่องหลัก")
-        rss_ids = {v["video_id"] for v in rss_videos}
-        added = 0
-        for v in search_videos:
-            if v["video_id"] not in rss_ids:
-                rss_videos.append(v)
-                added += 1
-        if added:
-            print(f"  ⊕ merged {added} live(s) ที่ RSS ไม่เจอ")
-        state_pre["last_live_search_ts"] = now.strftime("%Y-%m-%d %H:%M:%S")
-        save_state(state_pre)  # persist throttle immediately (main reloads state later)
-    else:
+    if not do_search and last_search:
         print(f"  ⏳ live-search skip (รันครั้งล่าสุด {last_search})")
 
     # 1b. รวม stream จาก state ที่ยังไม่ ended (กันหลุดจาก RSS — RSS คืนแค่ ~15 ตัว)
@@ -888,8 +873,32 @@ def main():
         })
         print(f"📌 state-persist: {vid} ({s.get('title','')[:40]}) — not in RSS, still polling")
 
-    # 2. Check which are live
+    # 2. Check which are live — งานหลัก ทำก่อนเสมอ (1 unit/50 videos)
     live_streams, confirmed_ended, api_ok = check_if_live(rss_videos)
+
+    # 2b. Live-Search layer — รันหลัง polling เสร็จ (100 units/ช่อง)
+    #     ต้องมาหลัง เพราะถ้ามาก่อนแล้วโดน rate-limit งานหลักจะไม่ได้ทำเลย
+    if do_search:
+        need = len(SEARCH_CHANNEL_IDS) * 100
+        left = quota_budget_left()
+        if not any_key_alive():
+            print("  ⛽ skip live-search — ไม่มี key ที่ใช้ได้ตอนนี้")
+        elif left < need + POLL_RESERVE_UNITS:
+            print(f"  ⛽ skip live-search — quota เหลือ {left}u ต้องกัน {POLL_RESERVE_UNITS}u ให้ polling")
+        else:
+            search_videos = get_live_from_search()
+            print(f"🔎 live-search: found {len(search_videos)} live ในช่องหลัก")
+            known = {v["video_id"] for v in rss_videos}
+            new = [v for v in search_videos if v["video_id"] not in known]
+            if new:
+                print(f"  ⊕ พบ {len(new)} live ที่ RSS ไม่เจอ — poll เพิ่ม")
+                extra, extra_ended, extra_ok = check_if_live(new)
+                live_streams.extend(extra)
+                confirmed_ended |= extra_ended
+                api_ok = api_ok and extra_ok
+                live_streams.sort(key=lambda x: x["concurrent_viewers"], reverse=True)
+            state_pre["last_live_search_ts"] = now.strftime("%Y-%m-%d %H:%M:%S")
+            save_state(state_pre)
 
     if not live_streams:
         print("ℹ️ No live streams right now — silent exit")
