@@ -109,6 +109,12 @@ DAILY_QUOTA_PER_KEY = int(os.environ.get("DAILY_QUOTA_PER_KEY", "10000"))
 POLL_RESERVE_UNITS = int(os.environ.get("POLL_RESERVE_UNITS", "1500"))
 PT = timezone(timedelta(hours=-8))  # Pacific (quota reset boundary)
 
+# In-memory cache ต่อ 1 tick (1 process run)
+# Persist: เก็บใน STATE_FILE (bind-mounted ใน Docker → รอด container restart)
+# ไม่เขียนไฟล์แยกทุก API call เพราะ /data ผูก bind mount เป็นรายไฟล์
+# ไฟล์ใหม่ใน container จะหายเมื่อ restart
+_HEALTH_CACHE = None
+
 
 def _quota_day():
     """วันของ quota window ตามเวลา Pacific (YouTube reset เที่ยงคืน PT)."""
@@ -116,26 +122,34 @@ def _quota_day():
 
 
 def _load_health():
+    """โหลด key health จาก STATE_FILE (bind mount → persist ข้าม container restart)."""
+    global _HEALTH_CACHE
+    if _HEALTH_CACHE is not None:
+        return _HEALTH_CACHE
+    h = {}
     try:
-        with open(KEY_HEALTH_FILE) as f:
-            h = json.load(f)
+        with open(STATE_FILE) as f:
+            h = json.load(f).get("_key_health", {}) or {}
     except Exception:
         h = {}
     if h.get("day") != _quota_day():
         h = {"day": _quota_day(), "keys": {}, "idx": 0}
     h.setdefault("keys", {})
     h.setdefault("idx", 0)
+    _HEALTH_CACHE = h
     return h
 
 
 def _save_health(h):
-    try:
-        tmp = KEY_HEALTH_FILE + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(h, f)
-        os.replace(tmp, KEY_HEALTH_FILE)
-    except Exception:
-        pass
+    """อัปเดต cache ในหน่วยความจำเท่านั้น — flush ลงดิสก์ตอน save_state() ปลาย tick.
+
+    ทำไมไม่เขียนไฟล์ทุกครั้ง:
+      - STATE_FILE ~90KB เขียนทุก API call = I/O เปล่า
+      - STATE_FILE เป็น Docker bind-mount ไฟล์เดี่ยว → os.replace() พัง (EBUSY)
+        ต้องเขียนทับ in-place เท่านั้น (save_state ทำอยู่แล้ว)
+    """
+    global _HEALTH_CACHE
+    _HEALTH_CACHE = h
 
 
 def _key_alive(h, k):
@@ -457,6 +471,13 @@ def load_state():
 
 
 def save_state(state):
+    """เขียน state ลงดิสก์ + flush key health เข้าไปด้วย.
+
+    เขียนทับ in-place (ไม่ใช้ tmp+rename) เพราะ STATE_FILE เป็น Docker
+    bind-mount ไฟล์เดี่ยว — os.replace() จะพังด้วย EBUSY
+    """
+    if _HEALTH_CACHE is not None:
+        state["_key_health"] = _HEALTH_CACHE
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
 
@@ -698,12 +719,47 @@ JSONL_FILE = os.environ.get("LIVE_JSONL",
     "/opt/data/projects/yt-live-monitor/live_data.jsonl")
 
 def append_local_jsonl(live_streams, now):
-    """Append live samples to local JSONL — dashboard reads this directly."""
+    """Append live samples to local JSONL — dashboard reads this directly.
+
+    Dedupe (แก้ 2026-08-07): ถ้า tick ปกติกับ manual/grace run ชนกันที่ ts เดียวกัน
+    จะได้แถวซ้ำ video_id+ts → dashboard นับซ้ำ. อ่านท้ายไฟล์มาเช็กก่อนเขียน
+    (อ่านแค่ 256KB สุดท้าย = ~15 ticks พอครอบคลุมการชนกันในรอบเดียวกัน)
+    """
+    ts = now.strftime("%Y-%m-%d %H:%M:%S")
+    seen = set()
+    try:
+        with open(JSONL_FILE, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            start = max(0, size - 262144)
+            f.seek(start)
+            chunk = f.read().decode("utf-8", "ignore").split("\n")
+            # ตัดบรรทัดแรกทิ้งเฉพาะตอน seek ข้ามมาจริง (อาจเป็นบรรทัดขาดครึ่ง)
+            if start > 0:
+                chunk = chunk[1:]
+            for line in chunk:
+                if not line.strip() or ts not in line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except Exception:
+                    continue
+                if d.get("ts") == ts:
+                    seen.add(d.get("video_id"))
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        print(f"⚠️ dedupe scan error: {e}")
+
     try:
         with open(JSONL_FILE, "a") as f:
+            skipped = 0
             for s in live_streams:
+                if s["video_id"] in seen:
+                    skipped += 1
+                    continue
                 f.write(json.dumps({
-                    "ts": now.strftime("%Y-%m-%d %H:%M:%S"),
+                    "ts": ts,
                     "video_id": s["video_id"],
                     "title": s["title"][:100],
                     "viewers": s["concurrent_viewers"],
@@ -711,6 +767,8 @@ def append_local_jsonl(live_streams, now):
                     "url": s["url"],
                     "actual_start": s.get("actual_start", ""),
                 }, ensure_ascii=False) + "\n")
+        if skipped:
+            print(f"⏭️ dedupe: ข้าม {skipped} แถวซ้ำที่ ts {ts}")
     except Exception as e:
         print(f"⚠️ JSONL write error: {e}")
 
