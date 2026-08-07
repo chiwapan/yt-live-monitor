@@ -97,6 +97,7 @@ TOP_N = int(os.environ.get("TOP_N", "20"))
 LOOKBACK = int(os.environ.get("VIEWS_LOOKBACK_DAYS", "2"))
 API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
 SNAPSHOT_TOP = int(os.environ.get("SNAPSHOT_TOP", "15"))
+TOTALS_SINCE = os.environ.get("TOTALS_SINCE", "2026-07-01")  # ดึงยอดวิวคลิปที่โพสต์หลังวันนี้
 
 
 # ─── Analytics (batch) ───────────────────────────────────────────────
@@ -336,10 +337,11 @@ def collect_channel_totals():
     for ch in CHANNELS:
         try:
             pid = _get_uploads_playlist(ch["id"])
-            # ดึงคลิปทั้งหมดใน uploads (loop ทุก page)
-            vids = []
+            # ดึงคลิปล่าสุด แล้วกรองเอาแค่โพสต์หลัง TOTALS_SINCE (default 2026-07-01)
+            vids = []          # (video_id, publishedAt)
             page = None
             page_no = 0
+            scanned = 0
             while True:
                 params = {"part": "contentDetails", "playlistId": pid,
                           "maxResults": 50, "key": API_KEY}
@@ -350,12 +352,16 @@ def collect_channel_totals():
                     pdata = json.loads(r.read())
                 for it in pdata.get("items", []):
                     vid = it.get("contentDetails", {}).get("videoId")
+                    pub = it.get("contentDetails", {}).get("videoPublishedAt", "")
                     if vid:
-                        vids.append(vid)
+                        scanned += 1
+                        if pub >= TOTALS_SINCE:   # ISO string compare works for dates
+                            vids.append((vid, pub))
                 page = pdata.get("nextPageToken")
                 page_no += 1
-                print(f"  … {ch['name']}: ดึงคลิปหน้า {page_no} ({len(vids)} วิดีโอแล้ว)", flush=True)
-                if not page:
+                print(f"  … {ch['name']}: หน้า {page_no} สแกน {scanned} คลิป, หลัง {TOTALS_SINCE}: {len(vids)}", flush=True)
+                # ถ้าเจอคลิปเก่าสุดในหน้านี้แล้ว (< SINCE) → หน้าถัดไปก็จะเก่ากว่านี้ทั้งหมด → หยุด
+                if not page or (pdata.get("items") and pdata["items"][-1].get("contentDetails", {}).get("videoPublishedAt", "") < TOTALS_SINCE):
                     break
             if not vids:
                 continue
@@ -366,7 +372,7 @@ def collect_channel_totals():
             n_core = 0
             n_short = 0
             for i in range(0, len(vids), 50):
-                batch = vids[i:i+50]
+                batch = [v[0] for v in vids[i:i+50]]
                 vurl = "https://www.googleapis.com/youtube/v3/videos?" + urlencode({
                     "part": "contentDetails,statistics", "id": ",".join(batch),
                     "key": API_KEY})
@@ -387,8 +393,9 @@ def collect_channel_totals():
                 "core_views": core_views, "short_views": short_views,
                 "n_core": n_core, "n_short": n_short,
                 "n_videos": len(vids),
+                "since": TOTALS_SINCE,
             })
-            print(f"  ✓ {ch['name']}: {total_views:,} วิว ({n_core} core + {n_short} short)")
+            print(f"  ✓ {ch['name']}: {total_views:,} วิว จากคลิป {len(vids)} ตัว (โพสต์หลัง {TOTALS_SINCE})")
         except Exception as e:
             print(f"⚠️ channel_totals {ch['name']}: {e}")
     return rows
