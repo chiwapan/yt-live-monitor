@@ -108,35 +108,40 @@ def get_analytics_service():
     return build("youtubeAnalytics", "v2", credentials=creds)
 
 
-def ids_param(channel_id):
-    if CMS_ID:
+def ids_param(channel_id, is_cms=False):
+    if CMS_ID and is_cms:
         return f"contentOwner=={CMS_ID}", {}
     return f"channel=={channel_id}", {}
 
 
-def query_channel_product(service, channel_id, start, end):
-    ids, extra = ids_param(channel_id)
+# ช่องที่อยู่ใน CMS ThaiRath (ใช้ contentOwner) — นอกเหนือจากนี้ใช้ channel== ธรรมดา
+CMS_CHANNEL_IDS = {
+    "UCrFDdD-EE05N7gjwZho2wqw",  # ThaiRath News
+    "UCtc9-CS_FIZ7GGrm8--wsrQ",  # ThaiRath Variety
+}
+
+
+def query_channel_product(service, channel_id, start, end, is_cms=False):
+    ids, extra = ids_param(channel_id, is_cms)
     req = {
         "ids": ids,
         "startDate": start,
         "endDate": end,
         "metrics": ("views,estimatedMinutesWatched,estimatedRevenue,subscribersGained,"
-                    "subscribersLost,averageViewDuration,impressions,impressionsClickThroughRate"),
+                    "subscribersLost,averageViewDuration"),
         "dimensions": "youtubeProduct",
     }
-    # onBehalfOfContentOwner เป็น system parameter → ส่งเป็น kwarg ตรงๆ ไม่ใช่ใน body dict
     return service.reports().query(**req, **extra).execute()
 
 
-def query_top_videos(service, channel_id, start, end, product):
-    ids, extra = ids_param(channel_id)
+def query_top_videos(service, channel_id, start, end, product, is_cms=False):
+    ids, extra = ids_param(channel_id, is_cms)
     req = {
         "ids": ids,
         "startDate": start,
         "endDate": end,
         "metrics": "views,estimatedMinutesWatched",
         "dimensions": "video",
-        "filters": f"youtubeProduct=={product}",
         "sort": "-views",
         "maxResults": TOP_N,
     }
@@ -151,14 +156,14 @@ def collect_day(service, day):
 
     for ch in CHANNELS:
         cid, cname = ch["id"], ch["name"]
+        is_cms = cid in CMS_CHANNEL_IDS
         try:
-            resp = query_channel_product(service, cid, start, end)
+            resp = query_channel_product(service, cid, start, end, is_cms)
             for row in resp.get("rows", []):
-                # column order ตาม metrics ข้างบน
-                (product, views, wtm, rev, sg, sl, avd, imp, ctr) = (
+                # column order ตาม metrics: product,views,wtm,rev,sg,sl,avd
+                (product, views, wtm, rev, sg, sl, avd) = (
                     row[0], int(row[1]), int(row[2]), float(row[3]),
-                    int(row[4]), int(row[5]), int(row[6]),
-                    int(row[7] or 0), float(row[8] or 0))
+                    int(row[4]), int(row[5]), int(row[6]))
                 # delay-safe: ข้ามวันที่ยังไม่มี data จริง
                 if views == 0 and rev == 0:
                     continue
@@ -167,7 +172,7 @@ def collect_day(service, day):
                     "product": product, "views": views,
                     "watch_time_min": wtm, "estimated_revenue": rev,
                     "subs_gained": sg, "subs_lost": sl,
-                    "avg_view_dur": avd, "impressions": imp, "ctr": ctr,
+                    "avg_view_dur": avd,
                 })
         except Exception as e:
             print(f"⚠️ channel query {cname}: {e}")
@@ -175,7 +180,7 @@ def collect_day(service, day):
         if TOP_N > 0:
             for product in ("CORE", "SHORTS"):
                 try:
-                    resp = query_top_videos(service, cid, start, end, product)
+                    resp = query_top_videos(service, cid, start, end, product, is_cms)
                     for row in resp.get("rows", []):
                         vid, views, wtm = row[0], int(row[1]), int(row[2])
                         rows_video.append({
