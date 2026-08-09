@@ -296,10 +296,10 @@ function renderKPI(rows){
   const champColor = champ ? chanMeta(champ[0]).color : 'var(--ink)';
   const champV = champ ? champ[1] : 0;
   document.getElementById('kpis').innerHTML = `
-  <div class="kpi"><div class="lab">ยอดวิวสะสม (ทุกวิดีโอ${state.src==='live'?' · สด':''})</div><div class="val num">${fmt(total)}</div><div class="sub">Short ${fmt(shorts)} · Video ${fmt(total-shorts)} · ${f.length} คลิป</div></div>
-  <div class="kpi"><div class="lab">ช่องแชมป์ (สะสม)</div><div class="val num sm" style="color:${champColor}">${champName}</div><div class="sub">${champ?fmt(champV)+' วิว':'—'}</div></div>
-  <div class="kpi"><div class="lab">${state.src==='live'?'วิวสดสูงสุด (วิดีโอเดี่ยว)':'วิดีโอวิวสูงสุด'}</div><div class="val num sm">${top?fmt(top.v):'—'}</div><div class="sub">${top?chanMeta(top.ch,top.t).name:'—'}</div></div>
-  <div class="kpi"><div class="lab">Short share</div><div class="val num">${share}</div><div class="sub">สัดส่วนวิวจาก Short</div></div>`;
+  <div class="kpi"><div class="lab">${state.src==='live'?'วิวสดสูงสุด (วิดีโอเดี่ยว)':'วิดีโอวิวสูงสุด'}</div><div class="val num">${top?fmt(top.v):'—'}</div><div class="sub">${top?(chanMeta(top.ch,top.t).name+' · '+(state.src==='live'?'อัปเดตชม.':'รายวัน')):'—'}</div></div>
+  <div class="kpi"><div class="lab">ช่องแชมป์ (วิวสูงสุด)</div><div class="val num sm" style="color:${champColor}">${champName}</div><div class="sub">${champ?fmt(champV)+' วิว':'—'}</div></div>
+  <div class="kpi"><div class="lab">คลิปที่ติดตาม</div><div class="val num">${f.length}</div><div class="sub">Short ${f.filter(d=>d.type==='short').length} · Video ${f.filter(d=>d.type==='video').length}</div></div>
+  <div class="kpi"><div class="lab">Short share</div><div class="val num">${share}</div><div class="sub">สัดส่วนวิวจาก Short${state.src==='live'?' (สะสมตลอดชีพ)':''}</div></div>`;
 }
 
 function renderLeaderboard(rows){
