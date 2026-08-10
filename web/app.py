@@ -206,7 +206,8 @@ def api_slot_compare():
                     hhmm = tv[0].split(" ")[1][:5]
                     e["curve"][hhmm] = e["curve"].get(hhmm, 0) + tv[1]
             progs.append({
-                "name": clean_video_title(latest_title) if latest_title else prog["name"],
+                "name": prog["name"],
+                "live_title": clean_video_title(latest_title) if latest_title else prog["name"],
                 "channel": prog["channel"],
                 "kw": prog.get("kw", []),
                 "vids": prog.get("vids", []),
