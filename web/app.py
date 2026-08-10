@@ -361,7 +361,7 @@ def api_views_month():
     + ยอดวิวสะสมล่าสุด (จาก snapshot views_live.jsonl ถ้ามี video_id นี้)
     ได้ทุกช่องรวมคู่แข่ง (พึ่ง Data API ไม่ใช่ CMS)"""
     import re as _re
-    month_path = os.environ.get("VIEWS_MONTH_JSONL", os.path.join(HERE, "..", "views_month.jsonl"))
+    month_path = os.environ.get("VIEWS_MONTH_JSONL", "/data/views_month.jsonl")
     live_path = VIEWS_LIVE_JSONL
 
     def read_jsonl(path):
