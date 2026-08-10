@@ -105,6 +105,14 @@ tr.click:hover{background:#f8fafc;}
 
   <div class="cardhead" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span style="font-size:13px;font-weight:600;color:var(--muted);">มุมมอง:</span>
+      <div class="seg" id="viewsTab">
+        <button class="on" data-t="latest">วันล่าสุด (สด)</button>
+        <button data-t="month">Views เดือนล่าสุด</button>
+      </div>
+      <span class="livebadge" id="liveBadge"><span class="d"></span> <span id="liveTs">—</span></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <span style="font-size:13px;font-weight:600;color:var(--muted);">แหล่งข้อมูล:</span>
       <div class="seg" id="srcSeg">
         <button class="on" data-s="live">สด (ทุกชม.)</button>
@@ -163,6 +171,24 @@ tr.click:hover{background:#f8fafc;}
       </div>
       <div class="strip" id="strip"></div>
     </div>
+
+    <div id="monthView" style="display:none;">
+      <div class="cardhead" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+        <h3 style="margin:0;">Views เดือนล่าสุด <span class="tag" id="monthLabel">—</span></h3>
+        <div class="seg" id="monthFilterSeg">
+          <button class="on" data-f="all">ทั้งหมด</button>
+          <button data-f="video">Video</button>
+          <button data-f="short">Short</button>
+        </div>
+      </div>
+      <div class="card">
+        <div id="monthNote" style="font-size:12.5px;color:var(--muted);margin-bottom:8px;"></div>
+        <table>
+          <thead><tr><th>#</th><th>ช่อง</th><th>หัวข้อข่าว / คลิป</th><th>ประเภท</th><th class="num">ยอดวิว</th><th class="num">ไลก์</th><th>วันโพสต์</th></tr></thead>
+          <tbody id="monthBody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <div class="foot">YT Views Monitor — อ่านจาก views_data.jsonl (รายวัน) + views_live.jsonl (สด) · โหมดสดอัปเดตทุกชั่วโมง</div>
@@ -217,7 +243,8 @@ const fmt = n => n>=1e6 ? (n/1e6).toFixed(2)+'M' : n>=1e3 ? (n/1e3).toFixed(0)+'
 const pct = (a,b) => b? ((a-b)/b*100) : 0;
 
 let RAW = {batch:[], live:[], last_live:'', last_batch:''};
-let state = { src:'live', filter:'all', angle:'split', page:1, pageSize:10, dFrom:null, dTo:null };
+let MONTH = {month:'', videos:[], total_videos:0, note:''};
+let state = { src:'live', filter:'all', angle:'split', page:1, pageSize:10, dFrom:null, dTo:null, tab:'latest' };
 
 function loadData(){
   fetch('/api/views-data').then(r=>r.json()).then(d=>{
@@ -375,11 +402,70 @@ function renderChart(rows){
 }
 
 function renderAll(){
+  if(state.tab==='month'){ return; }  // เดือนล่าสุดใช้ข้อมูลชุดเอง
   const rows=buildRows();
   renderKPI(rows); renderLeaderboard(rows); renderStrip(rows); renderChart(rows);
 }
 
+// ── Tab: Views เดือนล่าสุด ──
+function loadMonth(){
+  fetch('/api/views-month').then(r=>r.json()).then(d=>{
+    MONTH = d;
+    document.getElementById('monthLabel').textContent = d.month || '—';
+    document.getElementById('monthNote').textContent =
+      (d.note||'') + (d.total_videos? ` · ${d.total_videos} คลิป`:'');
+    renderMonth();
+  }).catch(e=>{
+    document.getElementById('monthNote').textContent = '⚠️ โหลดเดือนล่าสุดไม่ได้: '+(e&&e.message?e.message:e);
+  });
+}
+function renderMonth(){
+  const f = MONTH.videos.filter(v=> state.filter==='all' || (state.filter==='short'?v.is_short:v.is_short===false));
+  const shown = f.slice().sort((a,b)=>b.view_count-a.view_count);
+  const body = document.getElementById('monthBody');
+  body.innerHTML='';
+  shown.forEach((v,i)=>{
+    const tr = document.createElement('tr');
+    const cid = v.channel_id;
+    const meta = chanMeta(cid, v.channel);
+    const pub = (v.published_at||'').replace('T',' ').slice(0,10);
+    tr.innerHTML = `<td><span class="rank ${i<3?'top':''}">${i+1}</span></td>
+      <td><span class="chip-ch" style="background:${meta.color}">${meta.name}</span></td>
+      <td class="vtitle" title="${v.title_raw||v.title}">${v.video_id?`<a href="https://www.youtube.com/watch?v=${v.video_id}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">${v.title}</a>`:v.title}</td>
+      <td>${v.is_short?'<span class="chip-short">SHORT</span>':'<span class="chip-core">VIDEO</span>'}</td>
+      <td class="num">${fmt(v.view_count)}</td>
+      <td class="num">${fmt(v.like_count)}</td>
+      <td style="font-size:12px;color:var(--muted);">${pub}</td>`;
+    body.appendChild(tr);
+  });
+  document.getElementById('monthLabel').textContent = MONTH.month || '—';
+}
+
+function switchTab(tab){
+  state.tab = tab;
+  const isMonth = tab==='month';
+  document.getElementById('monthView').style.display = isMonth?'block':'none';
+  // ซ่อน/แสดง block หลักของแท็บ "วันล่าสุด"
+  const mainEls = document.querySelectorAll('#app > .kpis, #app > .grid2, #app > .card');
+  mainEls.forEach(el=>{ if(el.id!=='monthView') el.style.display = isMonth?'none':''; });
+  if(isMonth){ loadMonth(); }
+  else { renderAll(); }
+}
+
 // ── events ──
+document.getElementById('viewsTab').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  state.tab=b.dataset.t; state.page=1;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+  switchTab(state.tab);
+});
+document.getElementById('monthFilterSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  state.filter=b.dataset.f;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+  if(state.tab==='month') renderMonth();
+  else renderAll();
+});
 document.getElementById('srcSeg').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b)return;
   state.src=b.dataset.s; state.page=1;
