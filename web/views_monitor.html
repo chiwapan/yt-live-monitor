@@ -322,6 +322,9 @@ function renderLeaderboard(rows){
   const all = sorted(filtered(rows));
   const shown = all.slice(0, state.page*state.pageSize);
   const body = document.getElementById('lbBody');
+  // มุมมอง "วันล่าสุด" ไม่มี delta → ซ่อนคอลัมน์
+  const showDelta = state.tab !== 'latest';
+  document.getElementById('deltaHead').style.display = showDelta ? '' : 'none';
   body.innerHTML='';
   shown.forEach((d,i)=>{
     const dp = d.pv!=null ? pct(d.v,d.pv) : null;
@@ -332,7 +335,7 @@ function renderLeaderboard(rows){
       <td class="vtitle" title="${d.t}">${d.vid?`<a href="https://www.youtube.com/watch?v=${d.vid}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;" title="เปิดคลิปใน YouTube">${d.t}</a>`:d.t}</td>
       <td>${d.type==='short'?'<span class="chip-short">SHORT</span>':'<span class="chip-core">VIDEO</span>'}</td>
       <td class="num">${fmt(d.v)}</td>
-      <td class="num">${dp==null?'<span style="color:var(--muted)">—</span>':`<span class="delta ${dcls}">${dsign} ${Math.abs(dp).toFixed(1)}%</span>`}</td>`;
+      ${showDelta?`<td class="num">${dp==null?'<span style="color:var(--muted)">—</span>':`<span class="delta ${dcls}">${dsign} ${Math.abs(dp).toFixed(1)}%</span>`}</td>`:''}`;
     body.appendChild(tr);
   });
   document.getElementById('lbCount').textContent = `${shown.length}/${all.length} รายการ`;
