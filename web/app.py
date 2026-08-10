@@ -431,6 +431,77 @@ def api_views_month():
 
 
 
+@app.route("/api/views-today")
+def api_views_today():
+    """วิดีโอที่ published วันนี้ (calendar today = Asia/Bangkok) + ยอดวิวล่าสุด
+    ต่างจาก views-month: กรองเป็นวัน ไม่ใช่เดือน — มุมมอง 'วันล่าสุด' ต้องเป็นวิดีโอของวันนี้เท่านั้น"""
+    from datetime import timezone as _tz, timedelta as _td
+    month_path = os.environ.get("VIEWS_MONTH_JSONL", "/data/views_month.jsonl")
+    live_path = VIEWS_LIVE_JSONL
+
+    def read_jsonl(path):
+        if not os.path.exists(path):
+            return []
+        out = []
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    out.append(json.loads(line))
+                except Exception:
+                    continue
+        return out
+
+    vids = read_jsonl(month_path)
+    if not vids:
+        return jsonify({"date": "", "total_videos": 0, "videos": [], "note": "ยังไม่มี views_month.jsonl — รัน MODE=totals ก่อน"})
+
+    # วันที่ "วันนี้" ตาม Asia/Bangkok (UTC+7)
+    today = datetime.now(_tz(_td(hours=7))).strftime("%Y-%m-%d")
+
+    # ยอดวิวสดล่าสุดของแต่ละ video_id จาก snapshot
+    live_vc = {}
+    for r in read_jsonl(live_path):
+        vid = r.get("video_id")
+        if not vid:
+            continue
+        ts = r.get("ts", "")
+        if vid not in live_vc or ts > live_vc[vid][0]:
+            live_vc[vid] = (ts, int(r.get("view_count", 0)))
+
+    videos = []
+    for v in vids:
+        # กรองด้วย published_at == วันนี้ (แปลง 2026-08-10T... → 2026-08-10)
+        pub = v.get("published_at", "")[:10]
+        if pub != today:
+            continue
+        vid = v.get("video_id", "")
+        vc = live_vc.get(vid, ("", v.get("view_count", 0)))
+        vc = vc[1] if isinstance(vc, tuple) else vc
+        title = v.get("title", "")
+        ct = clean_video_title(title) if title else title
+        videos.append({
+            "channel_id": v.get("channel_id", ""),
+            "channel": v.get("channel", ""),
+            "video_id": vid,
+            "title": ct or title,
+            "title_raw": title,
+            "view_count": int(vc),
+            "like_count": int(v.get("like_count", 0)),
+            "is_short": bool(v.get("is_short_est")),
+            "published_at": v.get("published_at", ""),
+        })
+    videos.sort(key=lambda x: -x["view_count"])
+    return jsonify({
+        "date": today,
+        "total_videos": len(videos),
+        "videos": videos,
+        "note": f"คลิปที่โพสต์วันนี้ ({today}) + ยอดวิวล่าสุด",
+    })
+
+
 @app.route("/api/views-data")
 def api_views_data():
     """อ่าน views_data.jsonl (batch รายวันจาก Analytics ถ้ามี) + views_live.jsonl (snapshot สด)
