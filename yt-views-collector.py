@@ -500,7 +500,11 @@ def main():
         rows = collect_channel_totals()
         base = os.path.dirname(VIEWS_LIVE_JSONL)
         write_channel_totals(os.path.join(base, "channel_totals.jsonl"), rows)
-        write_month_videos(os.path.join(base, "views_month.jsonl"), MONTH_VID_ROWS)
+        # เขียน views_month ไปที่ VIEWS_MONTH_JSONL ถ้าตั้ง (ตรงกับ mount ใน compose)
+        # ไม่ใช่อนุมานจาก base → กัน backfill เขียนคนละที่กับที่ container mount
+        month_file = os.environ.get("VIEWS_MONTH_JSONL",
+                                    os.path.join(base, "views_month.jsonl"))
+        write_month_videos(month_file, MONTH_VID_ROWS)
         print("✅ channel_totals + views_month done")
         return
 
