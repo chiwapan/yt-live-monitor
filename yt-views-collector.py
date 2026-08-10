@@ -323,11 +323,15 @@ def upsert_jsonl(path, rows):
     print(f"✅ {path}: +{added} ใหม่, upsert {len(rows)-added} วันที่มีอยู่")
 
 
+MONTH_VID_ROWS = []
+
+
 def collect_channel_totals():
     """Backfill: ดึงคลิปที่โพสต์หลัง TOTALS_SINCE ของแต่ละช่อง → บวก viewCount สะสม
     แยก CORE/SHORTS ตาม duration (<60s = short) → ได้ยอดสะสมช่องคร่าวๆ ย้อนหลังได้
     (ไม่พึ่ง Analytics CMS) รันครั้งเดียว พอ ไม่ใส่ loop
     มี delay + retry ป้องกัน API key โดน rate-limit 403"""
+    MONTH_VID_ROWS.clear()
     if not API_KEY:
         print("⚠️ channel_totals ต้องมี YOUTUBE_API_KEY")
         return []
@@ -372,10 +376,11 @@ def collect_channel_totals():
             short_views = 0
             n_core = 0
             n_short = 0
+            vid_pub = {v[0]: v[1] for v in vids}
             for i in range(0, len(vids), 50):
                 batch = [v[0] for v in vids[i:i+50]]
                 vurl = "https://www.googleapis.com/youtube/v3/videos?" + urlencode({
-                    "part": "contentDetails,statistics", "id": ",".join(batch),
+                    "part": "contentDetails,statistics,snippet", "id": ",".join(batch),
                     "key": API_KEY})
                 for attempt in range(3):
                     try:
@@ -389,6 +394,7 @@ def collect_channel_totals():
                         else:
                             raise
                 for it in vdata.get("items", []):
+                    vid = it["id"]
                     vc = int(it.get("statistics", {}).get("viewCount", 0))
                     dur = it.get("contentDetails", {}).get("duration", "")
                     is_short = dur.startswith("PT") and "M" not in dur.split("T")[1] and "0S" in dur
@@ -397,6 +403,17 @@ def collect_channel_totals():
                         short_views += vc; n_short += 1
                     else:
                         core_views += vc; n_core += 1
+                    # เก็บ per-video สำหรับ Tab "Views เดือนล่าสุด"
+                    MONTH_VID_ROWS.append({
+                        "channel_id": ch["id"], "channel": ch["name"],
+                        "video_id": vid,
+                        "title": it.get("snippet", {}).get("title", "")[:100],
+                        "view_count": vc,
+                        "like_count": int(it.get("statistics", {}).get("likeCount", 0)),
+                        "is_short_est": bool(is_short),
+                        "published_at": vid_pub.get(vid, ""),
+                        "since": TOTALS_SINCE,
+                    })
             rows.append({
                 "ts": now, "channel_id": ch["id"], "channel": ch["name"],
                 "total_views": total_views,
@@ -481,8 +498,10 @@ def main():
             print("⚠️ ต้องตั้ง YOUTUBE_API_KEY สำหรับ totals mode")
             sys.exit(1)
         rows = collect_channel_totals()
-        write_channel_totals(os.path.join(os.path.dirname(VIEWS_LIVE_JSONL), "channel_totals.jsonl"), rows)
-        print("✅ channel_totals done")
+        base = os.path.dirname(VIEWS_LIVE_JSONL)
+        write_channel_totals(os.path.join(base, "channel_totals.jsonl"), rows)
+        write_month_videos(os.path.join(base, "views_month.jsonl"), MONTH_VID_ROWS)
+        print("✅ channel_totals + views_month done")
         return
 
     # MODE = batch
@@ -509,6 +528,31 @@ def main():
                 sheets_append("Views_Video", rows_vid)
 
     print("✅ Views collector (batch) done")
+
+
+def write_month_videos(path, rows):
+    """เขียน/merge per-video ที่ดึงจาก backfill totals → สำหรับ Tab 'Views เดือนล่าสุด'"""
+    if not rows:
+        print("⚠️ month_videos: ไม่มีข้อมูลรอบนี้ → ข้าม ไม่ทับไฟล์เดิม")
+        return
+    seen = {}
+    if os.path.exists(path):
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                    seen[r.get("video_id")] = r
+                except Exception:
+                    continue
+    for r in rows:
+        seen[r["video_id"]] = r
+    with open(path, "w") as f:
+        for r in seen.values():
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    print(f"✅ views_month +{len(rows)} คลิป (รวม {len(seen)} ในไฟล์) → {path}")
 
 
 if __name__ == "__main__":
