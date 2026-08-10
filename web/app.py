@@ -47,8 +47,7 @@ SLOTS = [
         {"name": "เรื่องเล่าเช้านี้ · เรื่องเล่าเช้านี้", "channel": "เรื่องเล่าเช้านี้", "kw": ["เรื่องเล่าเช้านี้", "เรื่องเล่าหน้าหนึ่ง", "เรื่องเล่าเสาร์-อาทิตย์"]},
         {"name": "Workpoint 23 · ข่าวเช้าเวิร์คพอยท์", "channel": "ข่าวเวิร์คพอยท์ 23", "kw": ["ข่าวเวิร์คพอยท์", "ข่าวเช้า"]},
         {"name": "ข่าวช่อง8 · คุยข่าวเช้า", "channel": "ข่าวช่อง8", "kw": ["คุยข่าวเช้า"]},
-        {"name": "ThaiRath News · ข่าวเช้าหัวเขียว", "channel": "ThaiRath News", "kw": ["ข่าวเช้าหัวเขียว"]},
-        {"name": "ThaiRath News · ห้องข่าวหัวเขียว", "channel": "ThaiRath News", "kw": ["ห้องข่าวหัวเขียว"]},
+        {"name": "ThaiRath News · Live", "channel": "ThaiRath News", "kw": ["ข่าวเช้าหัวเขียว", "ห้องข่าวหัวเขียว"]},
         {"name": "Ch7HD · เช้านี้ที่หมอชิต", "channel": "Ch7HDNews", "kw": ["เช้านี้ที่หมอชิต", "สนามข่าว"]},
         {"name": "Thai PBS · วันใหม่ไทยพีบีเอส", "channel": "Thai PBS", "kw": ["วันใหม่"]},
     ]},
@@ -281,9 +280,12 @@ def api_live_data():
                 ch_current = max(ch_current, last_pt["viewers"])
             ch_peak = max(ch_peak, peak)
             meta = stream_meta.get(vid, {})
+            raw_title = meta.get("title", vid)
+            # แมปชื่อหัวเขียวทั้งหมด → "Live" (รายการรวมเป็นอันเดียวตั้งแต่ 10 ส.ค. 69)
+            disp_title = "Live" if ("หัวเขียว" in raw_title) else raw_title
             ch_streams.append({
                 "video_id": vid,
-                "title": meta.get("title", vid),
+                "title": disp_title,
                 "url": meta.get("url", ""),
                 "actual_start": meta.get("actual_start", ""),
                 "peak": peak,
