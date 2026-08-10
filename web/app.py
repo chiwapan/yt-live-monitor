@@ -355,6 +355,82 @@ def views_monitor():
         return f"Dashboard error: {e}", 500
 
 
+@app.route("/api/views-month")
+def api_views_month():
+    """คลิปที่โพสต์ในเดือนล่าสุด (ตาม published_at ใน views_month.jsonl)
+    + ยอดวิวสะสมล่าสุด (จาก snapshot views_live.jsonl ถ้ามี video_id นี้)
+    ได้ทุกช่องรวมคู่แข่ง (พึ่ง Data API ไม่ใช่ CMS)"""
+    import re as _re
+    month_path = os.environ.get("VIEWS_MONTH_JSONL", os.path.join(HERE, "..", "views_month.jsonl"))
+    live_path = VIEWS_LIVE_JSONL
+
+    def read_jsonl(path):
+        if not os.path.exists(path):
+            return []
+        out = []
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    out.append(json.loads(line))
+                except Exception:
+                    continue
+        return out
+
+    vids = read_jsonl(month_path)
+    if not vids:
+        return jsonify({"month": "", "videos": [], "note": "ยังไม่มี views_month.jsonl — รัน MODE=totals ก่อน"})
+
+    # หาเดือนล่าสุดจาก published_at (รูปแบบ 2026-08-10T...)
+    months = sorted({v.get("published_at", "")[:7] for v in vids if v.get("published_at")})
+    if not months:
+        return jsonify({"month": "", "videos": [], "note": "ไม่มี published_at ในข้อมูล"})
+    latest_month = months[-1]
+
+    # ยอดวิวสดล่าสุดของแต่ละ video_id จาก snapshot
+    live_vc = {}
+    for r in read_jsonl(live_path):
+        vid = r.get("video_id")
+        if not vid:
+            continue
+        ts = r.get("ts", "")
+        if vid not in live_vc or ts > live_vc[vid][0]:
+            live_vc[vid] = (ts, int(r.get("view_count", 0)))
+
+    videos = []
+    for v in vids:
+        if v.get("published_at", "")[:7] != latest_month:
+            continue
+        vid = v.get("video_id", "")
+        # ใช้ยอดสดล่าสุด ถ้ามี ไม่ใช่ยอดตอน backfill (สดกว่า)
+        vc = live_vc.get(vid, ("", v.get("view_count", 0)))
+        vc = vc[1] if isinstance(vc, tuple) else vc
+        title = v.get("title", "")
+        # ถอด prefix/suffix ให้อ่านง่าย
+        ct = clean_video_title(title) if title else title
+        videos.append({
+            "channel_id": v.get("channel_id", ""),
+            "channel": v.get("channel", ""),
+            "video_id": vid,
+            "title": ct or title,
+            "title_raw": title,
+            "view_count": int(vc),
+            "like_count": int(v.get("like_count", 0)),
+            "is_short": bool(v.get("is_short_est")),
+            "published_at": v.get("published_at", ""),
+        })
+    videos.sort(key=lambda x: -x["view_count"])
+    return jsonify({
+        "month": latest_month,
+        "total_videos": len(videos),
+        "videos": videos,
+        "note": f"คลิปที่โพสต์เดือน {latest_month} + ยอดวิวล่าสด",
+    })
+
+
+
 @app.route("/api/views-data")
 def api_views_data():
     """อ่าน views_data.jsonl (batch รายวันจาก Analytics ถ้ามี) + views_live.jsonl (snapshot สด)
