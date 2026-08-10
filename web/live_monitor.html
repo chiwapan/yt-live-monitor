@@ -806,7 +806,7 @@ async function renderDayCompare(slot, si){
     }
     matches.forEach((s,i)=>{
       datasets.push({
-        label: matches.length>1 ? `${prog.name} (${i+1})` : prog.name,
+        label: matches.length>1 ? `${prog.live_title||prog.name} (${i+1})` : (prog.live_title||prog.name),
         data: s.points.map(p=>({x:toICT(p.ts), y:p.viewers})),
         borderColor: chColor(prog.channel),
         backgroundColor: chColor(prog.channel)+'14',
