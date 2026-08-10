@@ -653,7 +653,7 @@ function setCompareDay(day){
 async function renderCompare(){
   if(!SLOTCMP){
     try{
-      const r = await fetch('/api/slot-compare');
+      const r = await fetch('/api/slot-compare', {cache:'no-store'});
       SLOTCMP = await r.json();
     }catch(e){
       document.getElementById('content').innerHTML = '<div class="empty" style="color:var(--red)">โหลดข้อมูลเปรียบเทียบไม่สำเร็จ</div>';
