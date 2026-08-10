@@ -240,6 +240,7 @@ const pct = (a,b) => b? ((a-b)/b*100) : 0;
 
 let RAW = {batch:[], live:[], last_live:'', last_batch:''};
 let MONTH = {month:'', videos:[], total_videos:0, note:''};
+let TODAY_MAP = {};   // video_id → row จาก /api/views-today (วิดีโอ published วันนี้)
 let state = { filter:'all', angle:'split', page:1, pageSize:10, dFrom:null, dTo:null, tab:'latest' };
 
 function loadData(){
@@ -252,7 +253,7 @@ function loadData(){
     const cb = ()=>{
       if(state.tab==='month') loadMonth();
       else if(state.tab==='daily') loadDaily();
-      else renderAll();
+      else loadToday().then(renderAll);
     };
     setTimeout(cb, 0);
   }).catch(e=>{
@@ -265,29 +266,12 @@ function buildRows(){
   // latest = snapshot สด (live data) · daily = batch รายวัน
   const useSnapshot = state.tab === 'latest';
   if(useSnapshot){
-    // snapshot: แต่ละแถว = video สด ของช่องนั้น (view_count สะสม)
-    // มุมมอง "วันล่าสุด" = เอาเฉพาะ snapshot ที่ ts เป็นวันนี้ (ไม่ใช่ทุกวัน)
-    const todayStr = new Date().toISOString().slice(0,10);
-    const liveToday = RAW.live.filter(r => (r.ts||'').slice(0,10) === todayStr);
-    const byCh = {};
-    // dedupe: เอาแค่แถวล่าสุดของแต่ละ video_id (snapshot เก็บทุกชั่วโมง → วิดีโอคงเดิมมีซ้ำ)
-    const latestByVid = {};
-    liveToday.forEach(r=>{
-      const key = r.video_id;
-      if(!(key in latestByVid) || (r.ts||'') > (latestByVid[key].ts||'')) latestByVid[key]=r;
-    });
-    Object.values(latestByVid).forEach(r=>{
-      if(!(r.channel_id in byCh)) byCh[r.channel_id]=[];
-      byCh[r.channel_id].push(r);
-    });
-    const rows=[];
-    Object.keys(byCh).forEach(cid=>{
-      // snapshot ไม่มีวันก่อน → ไม่มี delta
-      byCh[cid].forEach(r=> rows.push({
-        ch: cid, cn: r.channel||'', t:r.title, type: r.is_short_est?'short':'video',
-        v: r.view_count, pv:null, _live:true, vid: r.video_id||''
-      }));
-    });
+    // มุมมอง "วันล่าสุด" = วิดีโอที่ published วันนี้ (จาก /api/views-today)
+    // ข้อมูลถูกโหลดเข้าตัวแปร TODAY (map video_id → row) แล้ว
+    const rows = Object.values(TODAY_MAP).map(r=>({
+      ch: r.channel_id, cn: r.channel||'', t: r.title||r.title_raw||'(ไม่ระบุชื่อ)',
+      type: r.is_short?'short':'video', v: r.view_count, pv:null, _live:true, vid: r.video_id||''
+    }));
     return rows;
   } else {
     // batch รายวัน: เอาวันล่าสุด (หรือ range) จาก per-video rows
@@ -413,6 +397,17 @@ function renderAll(){
 }
 
 // ── Tab: Views เดือนล่าสุด ──
+// ── มุมมอง "วันล่าสุด" — วิดีโอ published วันนี้ ──
+function loadToday(){
+  return fetch('/api/views-today').then(r=>r.json()).then(d=>{
+    TODAY_MAP = {};
+    (d.videos||[]).forEach(v=>{ TODAY_MAP[v.video_id]=v; });
+  }).catch(e=>{
+    TODAY_MAP = {};
+    document.getElementById('loading').textContent='⚠️ โหลดวิดีโอวันนี้ไม่ได้: '+(e&&e.message?e.message:e);
+  });
+}
+
 function loadMonth(){
   fetch('/api/views-month').then(r=>r.json()).then(d=>{
     MONTH = d;
@@ -457,7 +452,7 @@ function switchTab(tab){
   mainEls.forEach(el=>{ if(el.id!=='monthView') el.style.display = isMonth?'none':''; });
   if(isMonth){ loadMonth(); }
   else if(isDaily){ loadDaily(); }
-  else { renderAll(); }
+  else { loadToday().then(renderAll); }
 }
 
 // ── มุมมอง "รายวัน" (จาก batch ที่ API คำนวณจาก snapshot) ──
