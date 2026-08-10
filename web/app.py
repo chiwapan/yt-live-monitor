@@ -13,6 +13,7 @@ Config (env):
   LIVE_JSONL  — path to live_data.jsonl (default: ../live_data.jsonl relative to repo root)
 """
 import os
+import re
 import json
 from datetime import datetime, timezone, timedelta
 
@@ -86,6 +87,25 @@ SLOTS = [
 ]
 
 
+def clean_video_title(title):
+    """ตัด prefix (LIVE/ถ่ายทอดสด) และ suffix (| เดท) เหลือชื่อหลักของโปรแกรม"""
+    if not title:
+        return title
+    t = title.strip()
+    # ถอดคำ prefix LIVE หลายรูปแบบ + ถ่ายทอดสด
+    t = re.sub(r"(?i)^\s*(🔴)?\s*LIVE+!*\s*[:：]?\s*", "", t)
+    t = re.sub(r"(?i)^🔴\s*\[?Live\]?\s*[:：]?\s*", "", t)
+    t = re.sub(r"^(ถ่ายทอดสด|ถ่ายทอดสด LIVE)\s*[:：]?\s*", "", t)
+    # ตัด "| เดท" (อังกฤษ) หรือ "วันที่ X ..." (ไทย)
+    if "|" in t:
+        t = t.split("|")[0].strip()
+    t = re.sub(r"\s*[|｜].*$", "", t)
+    t = re.sub(r"\s*[-–]?\s*วันที่?\s*\d{1,2}\s*(เดือน|มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม|[ก-ฮ]{1,8})\s*\d{2,4}.*$", "", t)
+    t = re.sub(r"\s*\|\s*\d{1,2}\s*\w*\.?\s*(ก.ค.|ส.ค.|ก.ย.|ต.ค.|พ.ย.|ธ.ค.|ม.ค.|ก.พ.|มี.ค.|เม.ย.|พ.ค.|มิ.ย.|ก.ค.).*$", "", t)
+    t = t.strip(" :#[]()")
+    return t or title
+
+
 @app.route("/api/slot-compare")
 def api_slot_compare():
     """Peak viewers per program per day — วันต่อวัน สำหรับเทียบข่าวแต่ละช่วงเวลา"""
@@ -151,6 +171,8 @@ def api_slot_compare():
         progs = []
         for prog in slot["programs"]:
             days = {}
+            latest_title = None
+            latest_end = None
             for (ch_key, vid_key), s in streams.items():
                 # Live Report / หมวดที่ match ตาม video ID ตรงๆ (เหตุการณ์เดียว ต่างช่อง)
                 if prog.get("vids"):
@@ -161,6 +183,10 @@ def api_slot_compare():
                         continue
                     if not any(k in s["title"] for k in prog["kw"]):
                         continue
+                # track วิดีโอล่าสุด (end หลังสุด) ของโปรแกรมนี้ → ใช้ title เป็นชื่อแสดง
+                if latest_end is None or s["end"] > latest_end:
+                    latest_end = s["end"]
+                    latest_title = s["title"]
                 e = days.get(s["date"])
                 if e is None:
                     e = days[s["date"]] = {
@@ -180,7 +206,7 @@ def api_slot_compare():
                     hhmm = tv[0].split(" ")[1][:5]
                     e["curve"][hhmm] = e["curve"].get(hhmm, 0) + tv[1]
             progs.append({
-                "name": prog["name"],
+                "name": clean_video_title(latest_title) if latest_title else prog["name"],
                 "channel": prog["channel"],
                 "kw": prog.get("kw", []),
                 "vids": prog.get("vids", []),
@@ -281,11 +307,9 @@ def api_live_data():
             ch_peak = max(ch_peak, peak)
             meta = stream_meta.get(vid, {})
             raw_title = meta.get("title", vid)
-            # แมปชื่อหัวเขียวทั้งหมด → "Live" (รายการรวมเป็นอันเดียวตั้งแต่ 10 ส.ค. 69)
-            disp_title = "Live" if ("หัวเขียว" in raw_title) else raw_title
             ch_streams.append({
                 "video_id": vid,
-                "title": disp_title,
+                "title": raw_title,
                 "url": meta.get("url", ""),
                 "actual_start": meta.get("actual_start", ""),
                 "peak": peak,
