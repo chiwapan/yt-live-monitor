@@ -68,6 +68,19 @@ tr.click:hover{background:#f8fafc;}
 .loadmore{width:100%;margin-top:10px;padding:9px;border:1px dashed var(--line);background:#fafbfc;color:var(--muted);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans Thai',sans-serif;}
 .loadmore:hover{background:#f1f5f9;color:var(--ink);}
 
+/* ── Multi-select ช่อง ── */
+.chfilter{position:relative;}
+.chbtn{background:#fff;color:var(--ink);border:1px solid var(--line);padding:7px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans Thai',sans-serif;min-width:120px;text-align:left;}
+.chbtn:hover{border-color:var(--blue);}
+.chpop{position:absolute;top:calc(100% + 6px);right:0;z-index:50;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.12);padding:8px;max-height:340px;overflow-y:auto;min-width:240px;}
+.chpop .row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;}
+.chpop .row:hover{background:#f1f5f9;}
+.chpop .row input{accent-color:var(--blue);width:15px;height:15px;cursor:pointer;}
+.chpop .row .dot{width:9px;height:9px;border-radius:3px;flex:0 0 auto;}
+.chpop .acts{display:flex;gap:6px;padding:6px 4px 2px;border-top:1px solid var(--line);margin-top:4px;}
+.chpop .acts button{flex:1;font-size:12px;font-weight:600;padding:6px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;font-family:'Noto Sans Thai',sans-serif;}
+.chpop .acts button.on{background:var(--blue);color:#fff;border-color:var(--blue);}
+
 .strip{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;}
 .c1{background:#fafbfc;border:1px solid var(--line);border-radius:11px;padding:9px 10px;display:flex;flex-direction:column;gap:3px;min-width:0;}
 .c1 .nm{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -114,7 +127,12 @@ tr.click:hover{background:#f8fafc;}
       <span class="livebadge" id="liveBadge"><span class="d"></span> <span id="liveTs">—</span></span>
     </div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      <span class="livebadge" id="liveBadge"><span class="d"></span> <span id="liveTs">—</span></span>
+      <!-- Multi-select ช่อง (มุมมอง #1) -->
+      <span style="font-size:13px;font-weight:600;color:var(--muted);">ช่อง:</span>
+      <div class="chfilter" id="chFilter">
+        <button class="chbtn" id="chToggle">ทุกช่อง ▾</button>
+        <div class="chpop" id="chPop" style="display:none;"></div>
+      </div>
     </div>
     <div class="daterange" id="dateRange" style="display:none;">
       <label>จาก</label><input type="date" id="dFrom">
@@ -241,7 +259,7 @@ const pct = (a,b) => b? ((a-b)/b*100) : 0;
 let RAW = {batch:[], live:[], last_live:'', last_batch:''};
 let MONTH = {month:'', videos:[], total_videos:0, note:''};
 let TODAY_MAP = {};   // video_id → row จาก /api/views-today (วิดีโอ published วันนี้)
-let state = { filter:'all', angle:'split', page:1, pageSize:10, dFrom:null, dTo:null, tab:'latest' };
+let state = { filter:'all', angle:'split', page:1, pageSize:10, dFrom:null, dTo:null, tab:'latest', channels:[] };
 
 function loadData(){
   fetch('/api/views-data').then(r=>r.json()).then(d=>{
@@ -295,8 +313,10 @@ function buildRows(){
 }
 
 function filtered(rows){
-  if(state.filter==='all') return rows;
-  return rows.filter(r=>r.type===state.filter);
+  let out = rows;
+  if(state.filter!=='all') out = out.filter(r=>r.type===state.filter);
+  if(state.channels.length) out = out.filter(r=>state.channels.includes(r.ch));
+  return out;
 }
 function sorted(rows){ return rows.slice().sort((a,b)=>b.v-a.v); }
 
@@ -423,7 +443,9 @@ function loadMonth(){
   });
 }
 function renderMonth(){
-  const f = MONTH.videos.filter(v=> state.filter==='all' || (state.filter==='short'?v.is_short:v.is_short===false));
+  let f = MONTH.videos;
+  if(state.filter!=='all') f = f.filter(v=> state.filter==='short'?v.is_short:v.is_short===false);
+  if(state.channels.length) f = f.filter(v=> state.channels.includes(v.channel_id));
   const shown = f.slice().sort((a,b)=>b.view_count-a.view_count);
   const body = document.getElementById('monthBody');
   body.innerHTML='';
@@ -507,7 +529,61 @@ function applyDate(){
   state.page=1; renderAll();
 }
 
+// ── Multi-select ช่อง (มุมมอง #1) ──
+function buildChannelFilter(){
+  const pop = document.getElementById('chPop');
+  // รายชื่อช่องเรียงตาม CH map (มีสี/ชื่อแล้ว)
+  const entries = Object.entries(CH).map(([id,m])=>({id, name:m.name, color:m.color}))
+    .sort((a,b)=>a.name.localeCompare(b.name,'th'));
+  let html = '';
+  entries.forEach(e=>{
+    const chk = state.channels.includes(e.id) ? 'checked' : '';
+    html += `<label class="row"><input type="checkbox" data-ch="${e.id}" ${chk}>
+      <span class="dot" style="background:${e.color}"></span><span>${e.name}</span></label>`;
+  });
+  html += `<div class="acts">
+    <button id="chAll">ทุกช่อง</button>
+    <button id="chNone">ล้าง</button>
+  </div>`;
+  pop.innerHTML = html;
+  // events
+  pop.querySelectorAll('input[data-ch]').forEach(cb=>{
+    cb.addEventListener('change',()=>{
+      const id = cb.dataset.ch;
+      if(cb.checked){ if(!state.channels.includes(id)) state.channels.push(id); }
+      else { state.channels = state.channels.filter(x=>x!==id); }
+      updateChannelLabel();
+      refreshCurrentView();
+    });
+  });
+  document.getElementById('chAll').addEventListener('click',()=>{ state.channels=[]; buildChannelFilter(); updateChannelLabel(); refreshCurrentView(); });
+  document.getElementById('chNone').addEventListener('click',()=>{ state.channels=[]; buildChannelFilter(); updateChannelLabel(); refreshCurrentView(); });
+}
+function updateChannelLabel(){
+  const n = state.channels.length;
+  const btn = document.getElementById('chToggle');
+  if(n===0) btn.textContent = 'ทุกช่อง ▾';
+  else if(n===1){ const m=CH[state.channels[0]]; btn.textContent = (m?m.name:state.channels[0]).slice(0,18)+' ▾'; }
+  else btn.textContent = `เลือก ${n} ช่อง ▾`;
+}
+function refreshCurrentView(){
+  state.page=1;
+  if(state.tab==='month') renderMonth();
+  else if(state.tab==='daily') loadDaily();
+  else renderAll();
+}
+document.getElementById('chToggle').addEventListener('click',e=>{
+  e.stopPropagation();
+  const pop=document.getElementById('chPop');
+  pop.style.display = pop.style.display==='none'?'block':'none';
+});
+document.addEventListener('click',e=>{
+  const wrap=document.getElementById('chFilter');
+  if(wrap && !wrap.contains(e.target)) document.getElementById('chPop').style.display='none';
+});
+
 loadData();
+buildChannelFilter();  // สร้าง multi-select ช่อง
 // รีเฟรชอัตโนมัติทุก 5 นาที (สด)
 setInterval(()=>{ if(state.tab==='latest') loadData(); }, 300000);
 </script>
