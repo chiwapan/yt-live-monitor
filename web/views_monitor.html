@@ -408,16 +408,23 @@ function renderChart(rows){
   if(chart) chart.destroy();
   if(state.angle==='share'){
     // Pie chart — สัดส่วนวิวแต่ละช่อง (ใครครองตลาด)
+    // เรียงตามวิวสูงสุด → ต่ำสุด + legend ด้านล่างพร้อม % share
+    const totals = labels.map(k=>({k, name:chanName(k,''), v:f.filter(d=>d.ch===k).reduce((s,d)=>s+d.v,0)}));
+    totals.sort((a,b)=>b.v-a.v);
+    const grand = totals.reduce((s,t)=>s+t.v,0)||1;
     chart=new Chart(document.getElementById('ch'),{type:'pie',data:{
-      labels:labels.map(k=>chanName(k,'')),
-      datasets:[{data:labels.map(k=>f.filter(d=>d.ch===k).reduce((s,d)=>s+d.v,0)),
-        backgroundColor:colors,borderColor:'#fff',borderWidth:1.5}]
+      labels:totals.map(t=>`${t.name} — ${(t.v/grand*100).toFixed(1)}%`),
+      datasets:[{data:totals.map(t=>t.v),
+        backgroundColor:totals.map(t=>CH[t.k].color),borderColor:'#fff',borderWidth:1.5}]
     },options:{
       responsive:true,
-      plugins:{legend:{position:'right',labels:{font:{family:'Noto Sans Thai',size:10.5},boxWidth:11,padding:6}},
-        tooltip:{callbacks:{label:(c)=>{const tot=c.dataset.data.reduce((s,v)=>s+v,0)||1; return ` ${c.label}: ${fmt(c.parsed)} (${(c.parsed/tot*100).toFixed(1)}%)`;}}}}
+      plugins:{legend:{position:'bottom',labels:{font:{family:'Noto Sans Thai',size:11},boxWidth:12,padding:8,generateLabels:(ch)=>{
+        const ds=ch.data.datasets[0];
+        return ch.data.labels.map((lbl,i)=>({text:lbl,fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:1,hidden:false,index:i}));
+      }}},
+        tooltip:{callbacks:{label:(c)=>{const tot=c.dataset.data.reduce((s,v)=>s+v,0)||1; return ` ${c.label.split(' — ')[0]}: ${fmt(c.parsed)} (${(c.parsed/tot*100).toFixed(1)}%)`;}}}}
     }});
-    document.getElementById('chartNote').textContent='สัดส่วนวิวของแต่ละช่อง (Pie) — ใครครองตลาด';
+    document.getElementById('chartNote').textContent='สัดส่วนวิวของแต่ละช่อง (Pie) — เรียงตามอันดับสูงสุด';
     return;
   }
   chart=new Chart(document.getElementById('ch'),{type:'bar',data:{labels:names,datasets:ds},options:{
