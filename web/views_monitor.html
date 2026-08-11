@@ -385,7 +385,7 @@ function renderStrip(rows){
 let chart;
 function renderChart(rows){
   const labels=Object.keys(CH);
-  const names=labels.map(k=>{const n=chanName(k,''); return n.length>14?n.slice(0,13)+'…':n;});
+  const names=labels.map(k=>{const n=chanName(k,''); return n.length>22?n.slice(0,21)+'…':n;});
   const colors=labels.map(k=>CH[k].color);
   const f=filtered(rows);
   let ds,note='';
@@ -410,7 +410,7 @@ function renderChart(rows){
     responsive:true, indexAxis:'y',
     scales:{
       x:{stacked:stacked,grid:{color:'#eef1f5'},ticks:{font:{family:'Space Grotesk',size:11},callback:v=>state.angle==='share'?(v+'%'):(v>=1e6?(v/1e6)+'M':v>=1e3?(v/1e3)+'K':v)}},
-      y:{stacked:stacked,grid:{display:false},ticks:{font:{family:'Noto Sans Thai',size:12}}}
+      y:{stacked:stacked,grid:{display:false},ticks:{font:{family:'Noto Sans Thai',size:10.5},color:(ctx)=>colors[ctx.index]||'#101418'}}
     },
     plugins:{legend:{display:state.angle==='split',labels:{font:{family:'Noto Sans Thai'}}},
       tooltip:{callbacks:{title:(items)=>{const i=items[0].dataIndex; return chanName(labels[i],'');}}}}
