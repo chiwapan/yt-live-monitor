@@ -92,7 +92,7 @@ tr.click:hover{background:#f8fafc;}
 .angle{font-size:12px;font-weight:600;padding:6px 12px;border:1px solid var(--line);border-radius:20px;background:#fff;color:var(--muted);cursor:pointer;font-family:'Noto Sans Thai',sans-serif;}
 .angle.on{background:var(--violet);color:#fff;border-color:var(--violet);}
 
-.foot{margin-top:16px;font-size:12px;color:var(--muted);text-align:center;}
+#chartNote{font-size:13px;margin-top:8px;}
 .livebadge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--green);background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 10px;border-radius:20px;}
 .livebadge .d{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 1.2s infinite;}
 @keyframes blink{50%{opacity:.25;}}
@@ -384,7 +384,9 @@ function renderStrip(rows){
 
 let chart;
 function renderChart(rows){
-  const labels=Object.keys(CH); const names=labels.map(k=>CH[k].short); const colors=labels.map(k=>CH[k].color);
+  const labels=Object.keys(CH);
+  const names=labels.map(k=>{const n=chanName(k,''); return n.length>14?n.slice(0,13)+'…':n;});
+  const colors=labels.map(k=>CH[k].color);
   const f=filtered(rows);
   let ds,note='';
   if(state.angle==='split'){
@@ -405,10 +407,13 @@ function renderChart(rows){
   const stacked=state.angle==='split';
   if(chart) chart.destroy();
   chart=new Chart(document.getElementById('ch'),{type:'bar',data:{labels:names,datasets:ds},options:{
-    responsive:true, indexAxis:state.angle==='share'?'y':'x',
-    scales:stacked?{x:{stacked:true,grid:{display:false},ticks:{font:{family:'Noto Sans Thai'}}},y:{stacked:true,grid:{color:'#eef1f5'},ticks:{callback:v=>v>=1e6?(v/1e6)+'M':v>=1e3?(v/1e3)+'K':v,font:{family:'Space Grotesk'}}}}
-      :{x:{stacked:false,grid:{display:false},ticks:{font:{family:'Noto Sans Thai'}}},y:{stacked:false,grid:{color:'#eef1f5'},ticks:{font:{family:'Space Grotesk'},callback:v=>state.angle==='share'?v+'%':(v>=1e6?(v/1e6)+'M':v>=1e3?(v/1e3)+'K':v)}}},
-    plugins:{legend:{display:state.angle==='split',labels:{font:{family:'Noto Sans Thai'}}}}
+    responsive:true, indexAxis:'y',
+    scales:{
+      x:{stacked:stacked,grid:{color:'#eef1f5'},ticks:{font:{family:'Space Grotesk',size:11},callback:v=>state.angle==='share'?(v+'%'):(v>=1e6?(v/1e6)+'M':v>=1e3?(v/1e3)+'K':v)}},
+      y:{stacked:stacked,grid:{display:false},ticks:{font:{family:'Noto Sans Thai',size:12}}}
+    },
+    plugins:{legend:{display:state.angle==='split',labels:{font:{family:'Noto Sans Thai'}}},
+      tooltip:{callbacks:{title:(items)=>{const i=items[0].dataIndex; return chanName(labels[i],'');}}}}
   }});
   document.getElementById('chartNote').textContent=note;
 }
