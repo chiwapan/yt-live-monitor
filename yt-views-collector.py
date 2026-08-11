@@ -236,15 +236,34 @@ def _get_uploads_playlist(channel_id):
     return pid
 
 
+def _load_seen():
+    """คลิปที่เคยเจอในรอบก่อน (video_id set) — ป้องกันคลิปหลุดจาก top N ของ playlist แล้วรายงานวิวค้าง"""
+    p = os.environ.get("SNAPSHOT_SEEN_JSONL", os.path.join(os.path.dirname(VIEWS_LIVE_JSONL), "snapshot_seen.json"))
+    try:
+        with open(p, encoding="utf-8") as f:
+            return set(json.load(f)), p
+    except Exception:
+        return set(), p
+
+def _save_seen(seen, path):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(sorted(seen), f, ensure_ascii=False)
+    except Exception as e:
+        print(f"⚠️ save seen: {e}")
+
+
 def collect_snapshot():
     """ดึง viewCount สดทันที ของ top video ทุกช่อง → คล้าย social listening
     ทำงานทุกชั่วโมงได้ เพราะใช้ playlistItems (1 unit) + videos.list (~1-3 unit)
-    """
+    เพิ่ม stateful tracking: รวมคลิปที่เคยเจอรอบก่อน (ไม่พึ่งแค่ top N ของ playlist)
+    เพื่อป้องกันคลิปหลุดจาก top 15 แล้ว dashboard รายงานวิวค้าง"""
     if not API_KEY:
         print("⚠️ snapshot mode ต้องมี YOUTUBE_API_KEY")
         return []
     import urllib.request
     from urllib.parse import urlencode
+    seen, seen_path = _load_seen()
     rows = []
     now = datetime.now(ICT).strftime("%Y-%m-%d %H:%M:%S")
     for ch in CHANNELS:
@@ -257,29 +276,37 @@ def collect_snapshot():
             with urllib.request.urlopen(purl, timeout=15) as r:
                 pdata = json.loads(r.read())
             vids = [it["contentDetails"]["videoId"] for it in pdata.get("items", [])]
-            if not vids:
+            # รวมคลิปที่เคยเจอรอบก่อน (stateful) — ป้องกันหลุด top N
+            combined = list(dict.fromkeys(vids + [v for v in seen if True]))
+            # จำกัดขนาดเพื่อกัน quota เยอะเกิน (เอา top 15 + ของเก่าที่ยังอยู่ใน seen)
+            if len(combined) > SNAPSHOT_TOP * 4:
+                combined = vids + [v for v in seen if v not in set(vids)][:SNAPSHOT_TOP*3]
+            if not combined:
                 continue
-            # ดึง statistics สด (~1-3 unit)
-            vurl = "https://www.googleapis.com/youtube/v3/videos?" + urlencode({
-                "part": "snippet,statistics,contentDetails", "id": ",".join(vids),
-                "key": API_KEY})
-            with urllib.request.urlopen(vurl, timeout=15) as r:
-                vdata = json.loads(r.read())
-            for it in vdata.get("items", []):
-                dur = it.get("contentDetails", {}).get("duration", "")
-                vc = int(it.get("statistics", {}).get("viewCount", 0))
-                lc = int(it.get("statistics", {}).get("likeCount", 0))
-                # ประมาณ short จาก duration (<60s) — heuristic ไม่ใช่ fact จาก API
-                is_short = dur.startswith("PT") and "M" not in dur.split("T")[1] and "0S" in dur
-                rows.append({
-                    "ts": now, "channel_id": ch["id"], "channel": ch["name"],
-                    "video_id": it["id"],
-                    "title": it.get("snippet", {}).get("title", "")[:100],
-                    "view_count": vc, "like_count": lc,
-                    "is_short_est": bool(is_short),
-                })
+            # ดึง statistics สด (~1-3 unit) — แบ่งชุดละ 50
+            for i in range(0, len(combined), 50):
+                batch = combined[i:i+50]
+                vurl = "https://www.googleapis.com/youtube/v3/videos?" + urlencode({
+                    "part": "snippet,statistics,contentDetails", "id": ",".join(batch),
+                    "key": API_KEY})
+                with urllib.request.urlopen(vurl, timeout=15) as r:
+                    vdata = json.loads(r.read())
+                for it in vdata.get("items", []):
+                    dur = it.get("contentDetails", {}).get("duration", "")
+                    vc = int(it.get("statistics", {}).get("viewCount", 0))
+                    lc = int(it.get("statistics", {}).get("likeCount", 0))
+                    is_short = dur.startswith("PT") and "M" not in dur.split("T")[1] and "0S" in dur
+                    rows.append({
+                        "ts": now, "channel_id": ch["id"], "channel": ch["name"],
+                        "video_id": it["id"],
+                        "title": it.get("snippet", {}).get("title", "")[:100],
+                        "view_count": vc, "like_count": lc,
+                        "is_short_est": bool(is_short),
+                    })
+                    seen.add(it["id"])
         except Exception as e:
             print(f"⚠️ snapshot {ch['name']}: {e}")
+    _save_seen(seen, seen_path)
     return rows
 
 
