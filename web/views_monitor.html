@@ -93,7 +93,6 @@ tr.click:hover{background:#f8fafc;}
 .angle.on{background:var(--violet);color:#fff;border-color:var(--violet);}
 
 #chartNote{font-size:13px;margin-top:8px;}
-#ch{width:100%;height:440px;display:block;}
 .livebadge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--green);background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 10px;border-radius:20px;}
 .livebadge .d{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 1.2s infinite;}
 @keyframes blink{50%{opacity:.25;}}
@@ -174,7 +173,7 @@ tr.click:hover{background:#f8fafc;}
           <button class="angle" data-a="momentum">Momentum</button>
         </div>
         <div style="height:8px;"></div>
-        <canvas id="ch"></canvas>
+        <div style="height:440px;width:100%;"><canvas id="ch"></canvas></div>
         <div class="foot" id="chartNote" style="margin-top:8px;"></div>
       </div>
     </div>
