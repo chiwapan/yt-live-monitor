@@ -169,7 +169,7 @@ tr.click:hover{background:#f8fafc;}
         </div>
         <div class="angles" id="angleSeg">
           <button class="angle on" data-a="split">CORE vs SHORTS</button>
-          <button class="angle" data-a="share">Network Share</button>
+          <button class="angle" data-a="share">Views Share</button>
           <button class="angle" data-a="momentum">Momentum</button>
         </div>
         <div style="height:8px;"></div>
@@ -406,6 +406,20 @@ function renderChart(rows){
   }
   const stacked=state.angle==='split';
   if(chart) chart.destroy();
+  if(state.angle==='share'){
+    // Pie chart — สัดส่วนวิวแต่ละช่อง (ใครครองตลาด)
+    chart=new Chart(document.getElementById('ch'),{type:'pie',data:{
+      labels:labels.map(k=>chanName(k,'')),
+      datasets:[{data:labels.map(k=>f.filter(d=>d.ch===k).reduce((s,d)=>s+d.v,0)),
+        backgroundColor:colors,borderColor:'#fff',borderWidth:1.5}]
+    },options:{
+      responsive:true,
+      plugins:{legend:{position:'right',labels:{font:{family:'Noto Sans Thai',size:10.5},boxWidth:11,padding:6}},
+        tooltip:{callbacks:{label:(c)=>{const tot=c.dataset.data.reduce((s,v)=>s+v,0)||1; return ` ${c.label}: ${fmt(c.parsed)} (${(c.parsed/tot*100).toFixed(1)}%)`;}}}}
+    }});
+    document.getElementById('chartNote').textContent='สัดส่วนวิวของแต่ละช่อง (Pie) — ใครครองตลาด';
+    return;
+  }
   chart=new Chart(document.getElementById('ch'),{type:'bar',data:{labels:names,datasets:ds},options:{
     responsive:true, indexAxis:'y',
     scales:{
