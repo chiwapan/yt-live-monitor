@@ -173,7 +173,7 @@ tr.click:hover{background:#f8fafc;}
           <button class="angle" data-a="momentum">Momentum</button>
         </div>
         <div style="height:8px;"></div>
-        <canvas id="ch" height="280"></canvas>
+        <canvas id="ch" height="420"></canvas>
         <div class="foot" id="chartNote" style="margin-top:8px;"></div>
       </div>
     </div>
@@ -418,7 +418,7 @@ function renderChart(rows){
         backgroundColor:totals.map(t=>CH[t.k].color),borderColor:'#fff',borderWidth:1.5}]
     },options:{
       responsive:true,
-      plugins:{legend:{position:'bottom',labels:{font:{family:'Noto Sans Thai',size:11},boxWidth:12,padding:8,generateLabels:(ch)=>{
+      plugins:{legend:{position:'bottom',labels:{font:{family:'Noto Sans Thai',size:9.5},boxWidth:11,padding:7,generateLabels:(ch)=>{
         const ds=ch.data.datasets[0];
         return ch.data.labels.map((lbl,i)=>({text:lbl,fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:1,hidden:false,index:i}));
       }}},
