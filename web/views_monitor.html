@@ -93,6 +93,7 @@ tr.click:hover{background:#f8fafc;}
 .angle.on{background:var(--violet);color:#fff;border-color:var(--violet);}
 
 #chartNote{font-size:13px;margin-top:8px;}
+#ch{width:100%;height:440px;display:block;}
 .livebadge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--green);background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 10px;border-radius:20px;}
 .livebadge .d{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 1.2s infinite;}
 @keyframes blink{50%{opacity:.25;}}
@@ -173,7 +174,7 @@ tr.click:hover{background:#f8fafc;}
           <button class="angle" data-a="momentum">Momentum</button>
         </div>
         <div style="height:8px;"></div>
-        <canvas id="ch" height="420"></canvas>
+        <canvas id="ch"></canvas>
         <div class="foot" id="chartNote" style="margin-top:8px;"></div>
       </div>
     </div>
@@ -417,7 +418,7 @@ function renderChart(rows){
       datasets:[{data:totals.map(t=>t.v),
         backgroundColor:totals.map(t=>CH[t.k].color),borderColor:'#fff',borderWidth:1.5}]
     },options:{
-      responsive:true,
+      responsive:true, maintainAspectRatio:false,
       plugins:{legend:{position:'bottom',labels:{font:{family:'Noto Sans Thai',size:9.5},boxWidth:11,padding:7,generateLabels:(ch)=>{
         const ds=ch.data.datasets[0];
         return ch.data.labels.map((lbl,i)=>({text:lbl,fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:1,hidden:false,index:i}));
