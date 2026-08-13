@@ -81,12 +81,18 @@ tr.click:hover{background:#f8fafc;}
 .chpop .acts button{flex:1;font-size:12px;font-weight:600;padding:6px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;font-family:'Noto Sans Thai',sans-serif;}
 .chpop .acts button.on{background:var(--blue);color:#fff;border-color:var(--blue);}
 
-.strip{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;}
-.c1{background:#fafbfc;border:1px solid var(--line);border-radius:11px;padding:9px 10px;display:flex;flex-direction:column;gap:3px;min-width:0;}
-.c1 .nm{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.c1 .v{font-size:15px;font-weight:700;font-family:'Space Grotesk',sans-serif;}
-.c1 .t{font-size:10.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.c1 .ty{font-size:9.5px;font-weight:700;}
+.chstrip{display:flex;flex-direction:column;gap:7px;max-height:440px;overflow-y:auto;padding-right:2px;}
+.chstrip::-webkit-scrollbar{width:6px;}
+.chstrip::-webkit-scrollbar-thumb{background:var(--line);border-radius:10px;}
+.ch{display:flex;align-items:center;gap:10px;background:#fafbfc;border:1px solid var(--line);border-radius:11px;padding:8px 11px;min-width:0;}
+.ch .chdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.ch .chbody{flex:1;min-width:0;}
+.ch .chrank{font-size:10.5px;font-weight:800;color:var(--muted);width:14px;flex-shrink:0;text-align:right;}
+.ch .chnm{font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ch .cht{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;}
+.ch .chv{font-size:14px;font-weight:700;font-family:'Space Grotesk',sans-serif;flex-shrink:0;text-align:right;}
+.ch .chv small{font-size:9px;color:var(--muted);font-weight:600;font-family:'Noto Sans Thai',sans-serif;}
+.ch .chty{font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;flex-shrink:0;}
 
 .angles{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
 .angle{font-size:12px;font-weight:600;padding:6px 12px;border:1px solid var(--line);border-radius:20px;background:#fff;color:var(--muted);cursor:pointer;font-family:'Noto Sans Thai',sans-serif;}
@@ -165,25 +171,25 @@ tr.click:hover{background:#f8fafc;}
 
       <div class="card">
         <div class="cardhead">
-          <h3 style="margin:0;">มุมวิเคราะห์ <span class="tag">คลิกสลับ</span></h3>
+          <h3 style="margin:0;">อันดับ 1 ของแต่ละช่อง <span class="tag">ได้วิวจากข่าวอะไร</span></h3>
+          <span style="font-size:11.5px;color:var(--muted);">อิงตามตัวกรองด้านบน</span>
         </div>
-        <div class="angles" id="angleSeg">
-          <button class="angle on" data-a="split">CORE vs SHORTS</button>
-          <button class="angle" data-a="share">Views Share</button>
-          <button class="angle" data-a="momentum">Momentum</button>
-        </div>
-        <div style="height:8px;"></div>
-        <div style="height:440px;width:100%;"><canvas id="ch"></canvas></div>
-        <div class="foot" id="chartNote" style="margin-top:8px;"></div>
+        <div class="chstrip" id="strip"></div>
       </div>
     </div>
 
     <div class="card">
       <div class="cardhead">
-        <h3 style="margin:0;">อันดับ 1 ของแต่ละช่อง <span class="tag">ได้วิวจากข่าวอะไร</span></h3>
-        <span style="font-size:11.5px;color:var(--muted);">อิงตามตัวกรองด้านบน</span>
+        <h3 style="margin:0;">มุมวิเคราะห์ <span class="tag">คลิกสลับ</span></h3>
       </div>
-      <div class="strip" id="strip"></div>
+      <div class="angles" id="angleSeg">
+        <button class="angle on" data-a="split">CORE vs SHORTS</button>
+        <button class="angle" data-a="share">Views Share</button>
+        <button class="angle" data-a="momentum">Momentum</button>
+      </div>
+      <div style="height:8px;"></div>
+      <div style="height:420px;width:100%;"><canvas id="ch"></canvas></div>
+      <div class="foot" id="chartNote" style="margin-top:8px;"></div>
     </div>
 
     <div id="monthView" style="display:none;">
@@ -368,16 +374,30 @@ function renderLeaderboard(rows){
 function renderStrip(rows){
   const strip = document.getElementById('strip'); strip.innerHTML='';
   const f = filtered(rows);
+  // เรียงช่องตามยอดวิว top-คลิปของแต่ละช่อง (มากสุดก่อน) เพื่อตัวช่องเด่นขึ้นก่อน
+  const entries = [];
   Object.keys(CH).forEach(key=>{
     const top = sorted(f.filter(d=>d.ch===key))[0];
-    const div=document.createElement('div'); div.className='c1';
+    entries.push({key, top, v: top?top.v:0});
+  });
+  entries.sort((a,b)=>b.v-a.v);
+  entries.forEach(({key, top})=>{
+    const div=document.createElement('div'); div.className='ch';
+    const dot = `<span class="chdot" style="background:${CH[key].color}"></span>`;
     if(top){
       const dp = top.pv!=null?pct(top.v,top.pv):null;
-      div.innerHTML = `<div class="nm" style="color:${CH[key].color}">${CH[key].name}</div>
-        <div class="v num">${fmt(top.v)}</div>
-        <div class="t" title="${top.t}">${top.vid?`<a href="https://www.youtube.com/watch?v=${top.vid}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;" title="เปิดคลิปใน YouTube">${top.t}</a>`:top.t}</div>
-        <div class="ty" style="color:${top.type==='short'?'var(--violet)':'var(--blue)'}">${top.type==='short'?'SHORT':'VIDEO'}${dp==null?'':' · '+(dp>=0?'▲':'▼')+Math.abs(dp).toFixed(0)+'%'}</div>`;
-    } else { div.innerHTML=`<div class="nm" style="color:var(--muted)">${CH[key].name}</div><div class="t">—</div>`; }
+      const tyColor = top.type==='short'?'var(--violet)':'var(--blue)';
+      const tyTxt = top.type==='short'?'SHORT':'VIDEO';
+      div.innerHTML = ` ${dot}
+        <span class="chbody">
+          <span class="chnm" style="color:${CH[key].color}">${CH[key].name}</span>
+          <a class="cht" href="https://www.youtube.com/watch?v=${top.vid}" target="_blank" rel="noopener" title="เปิดคลิปใน YouTube">${top.t}</a>
+        </span>
+        <span class="chty" style="background:${tyColor}15;color:${tyColor}">${tyTxt}${dp==null?'':' · '+(dp>=0?'▲':'▼')+Math.abs(dp).toFixed(0)+'%'}</span>
+        <span class="chv num">${fmt(top.v)}<small> วิว</small></span>`;
+    } else {
+      div.innerHTML = `${dot}<span class="chbody"><span class="chnm" style="color:var(--muted)">${CH[key].name}</span><span class="cht">—</span></span>`;
+    }
     strip.appendChild(div);
   });
 }
