@@ -237,18 +237,22 @@ def _get_uploads_playlist(channel_id):
 
 
 def _load_seen():
-    """คลิปที่เคยเจอในรอบก่อน (video_id set) — ป้องกันคลิปหลุดจาก top N ของ playlist แล้วรายงานวิวค้าง"""
+    """คลิปที่เคยเจอในรอบก่อน — PER-CHANNEL dict {channel_id: set(video_id)}
+    (เดิมเป็น global set → วิดีโอช่องเดียวถูก append ครบทุกช่อง = mislabel 77K แถว)"""
     p = os.environ.get("SNAPSHOT_SEEN_JSONL", os.path.join(os.path.dirname(VIEWS_LIVE_JSONL), "snapshot_seen.json"))
     try:
         with open(p, encoding="utf-8") as f:
-            return set(json.load(f)), p
+            raw = json.load(f)
     except Exception:
-        return set(), p
+        return {}, p
+    # ถ้าเป็น global list (ไฟล์เก่า) → แปลงเป็น dict ว่าง (ให้ rebuild ต่อช่องจาก playlist)
+    if isinstance(raw, dict):
+        return {k: set(v) for k, v in raw.items()}, p
+    return {}, p
 
 def _save_seen(seen, path):
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(sorted(seen), f, ensure_ascii=False)
+        json.dump({k: sorted(v) for k, v in seen.items()}, open(path, "w", encoding="utf-8"), ensure_ascii=False)
     except Exception as e:
         print(f"⚠️ save seen: {e}")
 
@@ -263,10 +267,11 @@ def collect_snapshot():
         return []
     import urllib.request
     from urllib.parse import urlencode
-    seen, seen_path = _load_seen()
+    seen, seen_path = _load_seen()  # seen = dict {channel_id: set(video_ids)}
     rows = []
     now = datetime.now(ICT).strftime("%Y-%m-%d %H:%M:%S")
     for ch in CHANNELS:
+        ch_seen = seen.get(ch["id"], set())
         try:
             pid = _get_uploads_playlist(ch["id"])
             # ดึง video ID ล่าสุดจาก uploads playlist (1 unit)
@@ -276,14 +281,17 @@ def collect_snapshot():
             with urllib.request.urlopen(purl, timeout=15) as r:
                 pdata = json.loads(r.read())
             vids = [it["contentDetails"]["videoId"] for it in pdata.get("items", [])]
-            # รวมคลิปที่เคยเจอรอบก่อน (stateful) — ป้องกันหลุด top N
-            combined = list(dict.fromkeys(vids + [v for v in seen if True]))
-            # จำกัดขนาดเพื่อกัน quota เยอะเกิน (เอา top 15 + ของเก่าที่ยังอยู่ใน seen)
+            # stateful tracking: PER-CHANNEL — รวมเฉพาะวิดีโอของช่องนี้ที่เคยเห็น
+            # (ห้ามใช้ global seen! เดิมเอา vids ทุกช่องมา append ให้ช่องเดียว → mislabel 77K แถว)
+            combined = list(dict.fromkeys(vids + [v for v in ch_seen if True]))
+            # จำกัดขนาดเพื่อกัน quota เยอะเกิน (เอา top 15 + ของเก่าของช่องนี้)
             if len(combined) > SNAPSHOT_TOP * 4:
-                combined = vids + [v for v in seen if v not in set(vids)][:SNAPSHOT_TOP*3]
+                combined = vids + [v for v in ch_seen if v not in set(vids)][:SNAPSHOT_TOP*3]
             if not combined:
                 continue
             # ดึง statistics สด (~1-3 unit) — แบ่งชุดละ 50
+            # ⚠️ ตอนบันทึก ใช้ channelId จริงของวิดีโอ (snippet.channelId) ไม่ใช่ ch ที่วนลูป
+            #    เพราะ playlistItems หนึ่งช่องอาจมีแค่สมาชิกช่องนั้น (ปกติ) แต่กันไว้กรณีหลุด
             for i in range(0, len(combined), 50):
                 batch = combined[i:i+50]
                 vurl = "https://www.googleapis.com/youtube/v3/videos?" + urlencode({
@@ -296,16 +304,23 @@ def collect_snapshot():
                     vc = int(it.get("statistics", {}).get("viewCount", 0))
                     lc = int(it.get("statistics", {}).get("likeCount", 0))
                     is_short = dur.startswith("PT") and "M" not in dur.split("T")[1] and "0S" in dur
+                    # channel จริงของวิดีโอ (source of truth) — ดึงชื่อจาก CHANNELS map
+                    true_cid = it.get("snippet", {}).get("channelId", "")
+                    true_name = next((c["name"] for c in CHANNELS if c["id"] == true_cid), true_cid)
                     rows.append({
-                        "ts": now, "channel_id": ch["id"], "channel": ch["name"],
+                        "ts": now, "channel_id": true_cid or ch["id"], "channel": true_name,
                         "video_id": it["id"],
                         "title": it.get("snippet", {}).get("title", "")[:100],
                         "view_count": vc, "like_count": lc,
                         "is_short_est": bool(is_short),
                     })
-                    seen.add(it["id"])
+                    # เก็บเฉพาะวิดีโอที่เป็นของช่องนี้ใน seen ของช่องนี้ (กัน mislabel วนซ้ำ)
+                    if true_cid == ch["id"]:
+                        ch_seen.add(it["id"])
         except Exception as e:
             print(f"⚠️ snapshot {ch['name']}: {e}")
+        # อัปเดต seen ของช่องนี้ (กันวนซ้ำ mislabel) — merge เข้า dict หลัก
+        seen[ch["id"]] = ch_seen
     _save_seen(seen, seen_path)
     return rows
 
