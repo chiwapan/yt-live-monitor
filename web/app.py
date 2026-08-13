@@ -543,11 +543,13 @@ def api_views_data():
 
 def compute_daily_from_snapshot(live):
     """คำนวณยอดวิวรายวันจาก snapshot history (view_count สะสมทุกชั่วโมง)
-    รายวัน[date][video] = view_count สุดท้ายของวัน − view_count สุดท้ายของวันก่อนหน้า
-    ถ้าไม่มีวันก่อน → เทียบกับ 0 (วิดีโอเพิ่งโพสต์)"""
+    รายวัน[date][video] = view_count สุดท้ายของวัน − baseline
+    baseline: วิวสุดท้ายของวันก่อนหน้า ถ้ามี; ถ้าไม่มี (วิดีโอวันแรกของ monitor)
+              ใช้วิว snapshot แรกของวันนั้นเป็น baseline แทน 0
+    → ไม่นับวิวสะสมทั้งคลิปที่มาก่อนเริ่มเก็บ (กัน daily พอง 39M ที่เจอ 13-08)"""
     from collections import defaultdict
-    # รวบรวม (video_id, date) -> (ts สุดท้าย, view_count สุดท้าย)
-    by_vid_date = defaultdict(dict)  # vid -> date -> (ts, vc)
+    # รวบรวม (video_id, date) -> (ts แรก, vc แรก, ts สุดท้าย, vc สุดท้าย)
+    by_vid_date = defaultdict(dict)  # vid -> date -> [first_ts, first_vc, last_ts, last_vc]
     meta = {}  # vid -> (channel_id, channel, title, is_short)
     for r in live:
         vid = r.get("video_id")
@@ -556,14 +558,18 @@ def compute_daily_from_snapshot(live):
         d = r["ts"][:10]
         ts = r["ts"]
         vc = int(r.get("view_count", 0))
-        cur = by_vid_date[vid].get(d)
-        if cur is None or ts > cur[0]:
-            by_vid_date[vid][d] = (ts, vc)
+        e = by_vid_date[vid].get(d)
+        if e is None:
+            by_vid_date[vid][d] = [ts, vc, ts, vc]
+        else:
+            if ts < e[0]:
+                e[0], e[1] = ts, vc
+            if ts > e[2]:
+                e[2], e[3] = ts, vc
         meta[vid] = (r.get("channel_id"), r.get("channel"), r.get("title"), r.get("is_short_est"))
 
-    # วันทั้งหมดเรียงลำดับ
+    # วันทั้งหมดเรียงลำดับ (global) — ใช้อ้างอิงวันก่อนหน้าของวิดีโอ
     all_dates = sorted({d for vid in by_vid_date for d in by_vid_date[vid]})
-    # วันก่อนหน้าของแต่ละวัน
     prev_date = {}
     for i, d in enumerate(all_dates):
         prev_date[d] = all_dates[i-1] if i > 0 else None
@@ -571,18 +577,16 @@ def compute_daily_from_snapshot(live):
     rows = []
     for vid, dmap in by_vid_date.items():
         cid, cname, title, is_short = meta[vid]
-        for d in dmap:
-            vc_today = dmap[d][1]
+        for d in (dmap):
+            last_ts, last_vc = dmap[d][2], dmap[d][3]
+            first_vc = dmap[d][1]
             pd = prev_date[d]
-            vc_prev = 0
+            # baseline เลือก: วิวสุดท้ายวันก่อน (ถ้ามี) > มิฉะนั้น วิวแรกของวัน (วันแรกของ monitor)
             if pd and pd in dmap:
-                vc_prev = dmap[pd][1]
-            elif pd:
-                # หา vc วันก่อนจากวันไหนก็ได้ที่ < d (เอาแค่ก่อนสุด)
-                earlier = [dd for dd in dmap if dd < d]
-                if earlier:
-                    vc_prev = dmap[max(earlier)][1]
-            daily = max(0, vc_today - vc_prev)
+                base = dmap[pd][3]  # วิวสุดท้ายวันก่อน
+            else:
+                base = first_vc     # วันแรกของ monitor → ใช้จุดแรกของวันแทน 0
+            daily = max(0, last_vc - base)
             rows.append({
                 "date": d, "channel_id": cid, "channel": cname,
                 "video_id": vid, "title": title or "",
