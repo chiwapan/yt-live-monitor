@@ -16,3 +16,8 @@ export VIEWS_LIVE_JSONL=/opt/data/projects/yt-live-monitor/views_live.jsonl
 export SNAPSHOT_TOP=15
 
 /usr/bin/python3 "$HERE/yt-views-collector.py" 2>&1
+
+# เติมคลิปใหม่เข้า views_month.jsonl ทุกครั้งหลัง snapshot
+# ป้องกันหน้า "วันล่าสุด (สด)" ว่าง (month file หยุดอัปเดต)
+# backfill ข้ามตัวที่มีแล้ว (new_ids=0 → ใช้ quota 0) จึงรันทุกชม. ได้ปลอดภัย
+/usr/bin/python3 "$HERE/backfill_month_incremental.py" 2>&1 || true
