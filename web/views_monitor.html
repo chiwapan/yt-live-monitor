@@ -554,20 +554,25 @@ function renderMonthStrip(){
 let monthChart;
 function renderMonthChart(){
   const f = filteredMonth();
+  // เรียงช่องตามยอดวิวรวม (Top → ล่าง) ไม่ใช่ตามลำดับ map
+  const totals = Object.keys(CH).map(k=>({k, v: f.filter(v=>v.channel_id===k).reduce((s,v)=>s+v.view_count,0)}));
+  totals.sort((a,b)=>b.v-a.v);
+  const labels = totals.map(t=>t.k);
+  const names = labels.map(k=>{const n=chanName(k,''); return n.length>22?n.slice(0,21)+'…':n;});
   let ds,note='';
   if(state.monthAngle==='split'){
-    const core=[],short=[],labels=Object.keys(CH);
+    const core=[],short=[];
     labels.forEach(k=>{
       const vf=f.filter(v=>v.channel_id===k);
       core.push(vf.filter(v=>!v.is_short).reduce((s,v)=>s+v.view_count,0));
       short.push(vf.filter(v=>v.is_short).reduce((s,v)=>s+v.view_count,0));
     });
-    ds={labels,datasets:[{label:'CORE (Video)',data:core,backgroundColor:labels.map(k=>CH[k].color)},{label:'SHORTS',data:short,backgroundColor:labels.map(k=>CH[k].color+'66')}]};
-    note='แยกสัดส่วน Video/Short รายช่อง (เดือนนี้)';
+    ds={labels:names,datasets:[{label:'CORE (Video)',data:core,backgroundColor:labels.map(k=>CH[k].color)},{label:'SHORTS',data:short,backgroundColor:labels.map(k=>CH[k].color+'66')}]};
+    note='แยกสัดส่วน Video/Short รายช่อง (เดือนนี้) — เรียงตามยอดวิวรวม';
   } else {
     const grand=f.reduce((s,v)=>s+v.view_count,0)||1;
-    const data=Object.keys(CH).map(k=>f.filter(v=>v.channel_id===k).reduce((s,v)=>s+v.view_count,0)/grand*100);
-    ds={labels:Object.keys(CH),datasets:[{data,backgroundColor:Object.keys(CH).map(k=>CH[k].color)}]};
+    const data=labels.map(k=>f.filter(v=>v.channel_id===k).reduce((s,v)=>s+v.view_count,0)/grand*100);
+    ds={labels:names,datasets:[{data,backgroundColor:labels.map(k=>CH[k].color)}]};
     note='สัดส่วนวิวของแต่ละช่อง (Pie) — เรียงตามอันดับสูงสุด';
   }
   const stacked=state.monthAngle==='split';
@@ -577,9 +582,9 @@ function renderMonthChart(){
     data: ds,
     options:{ responsive:true, maintainAspectRatio:false,
       scales:{ x:{stacked:stacked,grid:{color:'#eef1f5'},ticks:{font:{family:'Space Grotesk',size:11}}},
-        y:{stacked:stacked,grid:{display:false},ticks:{font:{family:'Noto Sans Thai',size:10.5},color:(ctx)=>CH[ds.labels[ctx.index]]?.color||'#101418'}}},
+        y:{stacked:stacked,grid:{display:false},ticks:{font:{family:'Noto Sans Thai',size:10.5},color:(ctx)=>CH[labels[ctx.index]]?.color||'#101418'}}},
       plugins:{legend:{display:state.monthAngle==='split',labels:{font:{family:'Noto Sans Thai'}}},
-        tooltip:{callbacks:{title:(items)=>{const i=items[0].dataIndex; return chanMeta(ds.labels[i],'').name;}}}}}
+        tooltip:{callbacks:{title:(items)=>{const i=items[0].dataIndex; return chanMeta(labels[i],'').name;}}}}}
   });
   document.getElementById('monthChartNote').textContent=note;
 }
