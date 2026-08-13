@@ -530,9 +530,11 @@ def api_views_data():
     if not batch and live:
         batch = compute_daily_from_snapshot(live)
 
+    # IMPORTANT: อย่าส่ง raw `live` array เต็ม (180K+ แถว ≈ 114MB) เข้าเบราว์เซอร์ —
+    # frontend ใช้แค่ RAW.batch (daily) + last_live timestamp, ไม่ได้แตะ RAW.live เลย
+    # ส่งแบบนี้ payload เล็กลงจาก 114MB → ~8.5MB หน้าไม่ค้าง
     return jsonify({
         "batch": batch,          # channel-level + per-video (มี date, product)
-        "live": live,            # snapshot สด (ts, video_id, view_count, is_short_est)
         "last_live": last_live,
         "last_batch": last_batch,
         "channels": None,
