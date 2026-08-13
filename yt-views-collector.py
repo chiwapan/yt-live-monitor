@@ -237,22 +237,30 @@ def _get_uploads_playlist(channel_id):
 
 
 def _load_seen():
-    """คลิปที่เคยเจอในรอบก่อน — PER-CHANNEL dict {channel_id: set(video_id)}
-    (เดิมเป็น global set → วิดีโอช่องเดียวถูก append ครบทุกช่อง = mislabel 77K แถว)"""
+    """คลิปที่เคยเจอในรอบก่อน — PER-CHANNEL dict {channel_id: {video_id: last_seen_ts}}
+    (เดิมเป็น global set → วิดีโอช่องเดียวถูก append ครบทุกช่อง = mislabel 77K แถว;
+    ต่อมา dict {cid: {vid}} แต่เก็บเป็น set → ตอน cap เลือกแบบสุ่ม วิดีโอใหม่หลุด บั๊ก 130K)"""
     p = os.environ.get("SNAPSHOT_SEEN_JSONL", os.path.join(os.path.dirname(VIEWS_LIVE_JSONL), "snapshot_seen.json"))
     try:
         with open(p, encoding="utf-8") as f:
             raw = json.load(f)
     except Exception:
         return {}, p
-    # ถ้าเป็น global list (ไฟล์เก่า) → แปลงเป็น dict ว่าง (ให้ rebuild ต่อช่องจาก playlist)
     if isinstance(raw, dict):
-        return {k: set(v) for k, v in raw.items()}, p
+        # รองรับทั้ง {cid:{vid:ts}} และ {cid:[vid,...]} (seed เก่า)
+        out = {}
+        for k, v in raw.items():
+            if isinstance(v, dict):
+                out[k] = dict(v)
+            else:  # list/set เดิม → ให้ ts ว่าง (จะถูก recent-sort ช่วยก่อน)
+                ts = "2000-01-01 00:00:00"
+                out[k] = {vid: ts for vid in v}
+        return out, p
     return {}, p
 
 def _save_seen(seen, path):
     try:
-        json.dump({k: sorted(v) for k, v in seen.items()}, open(path, "w", encoding="utf-8"), ensure_ascii=False)
+        json.dump({k: v for k, v in seen.items()}, open(path, "w", encoding="utf-8"), ensure_ascii=False)
     except Exception as e:
         print(f"⚠️ save seen: {e}")
 
@@ -271,7 +279,7 @@ def collect_snapshot():
     rows = []
     now = datetime.now(ICT).strftime("%Y-%m-%d %H:%M:%S")
     for ch in CHANNELS:
-        ch_seen = seen.get(ch["id"], set())
+        ch_seen = seen.get(ch["id"], {})
         try:
             pid = _get_uploads_playlist(ch["id"])
             # ดึง video ID ล่าสุดจาก uploads playlist (1 unit)
@@ -283,10 +291,14 @@ def collect_snapshot():
             vids = [it["contentDetails"]["videoId"] for it in pdata.get("items", [])]
             # stateful tracking: PER-CHANNEL — รวมเฉพาะวิดีโอของช่องนี้ที่เคยเห็น
             # (ห้ามใช้ global seen! เดิมเอา vids ทุกช่องมา append ให้ช่องเดียว → mislabel 77K แถว)
-            combined = list(dict.fromkeys(vids + [v for v in ch_seen if True]))
-            # จำกัดขนาดเพื่อกัน quota เยอะเกิน (เอา top 15 + ของเก่าของช่องนี้)
+            # recent-first: เรียง ch_seen ตาม last_seen (ใหม่สุดก่อน) → เวลาจำกัด cap ทิ้งเฉพาะของเก่าที่นาน
+            recent_old = sorted(ch_seen.keys(),
+                                key=lambda v: ch_seen.get(v, "2000-01-01 00:00:00"),
+                                reverse=True)
+            combined = list(dict.fromkeys(vids + recent_old))
+            # จำกัดขนาดเพื่อกัน quota เยอะเกิน (เอา top 15 + ของเก่าเพิ่งเห็นล่าสุดของช่องนี้)
             if len(combined) > SNAPSHOT_TOP * 4:
-                combined = vids + [v for v in ch_seen if v not in set(vids)][:SNAPSHOT_TOP*3]
+                combined = list(dict.fromkeys(vids + recent_old[:SNAPSHOT_TOP*3]))
             if not combined:
                 continue
             # ดึง statistics สด (~1-3 unit) — แบ่งชุดละ 50
@@ -314,9 +326,12 @@ def collect_snapshot():
                         "view_count": vc, "like_count": lc,
                         "is_short_est": bool(is_short),
                     })
-                    # เก็บเฉพาะวิดีโอที่เป็นของช่องนี้ใน seen ของช่องนี้ (กัน mislabel วนซ้ำ)
-                    if true_cid == ch["id"]:
-                        ch_seen.add(it["id"])
+                    # เก็บเฉพาะวิดีโอที่เป็นของช่องนี้ใน seen ของช่องนี้ (กัน mislabel วนซ้ำ) + ts ล่าสุด
+                    # ใช้ true_cid โดยตรง: ถ้าเป็นช่องที่ tracked ให้เก็บใน seen ของช่องจริงนั้น
+                    if any(c["id"] == true_cid for c in CHANNELS):
+                        seen.setdefault(true_cid, {})[it["id"]] = now
+                    elif true_cid == ch["id"]:
+                        ch_seen[it["id"]] = now
         except Exception as e:
             print(f"⚠️ snapshot {ch['name']}: {e}")
         # อัปเดต seen ของช่องนี้ (กันวนซ้ำ mislabel) — merge เข้า dict หลัก
