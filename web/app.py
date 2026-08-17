@@ -84,6 +84,10 @@ SLOTS = [
         {"name": "terodigital · ถกไม่เถียง", "channel": "terodigital", "kw": ["ถกไม่เถียง"]},
         {"name": "ช่อง8 Thai Ch8 · คนดังนั่งเคลียร์", "channel": "ช่อง8 Thai Ch8", "kw": ["คนดังนั่งเคลียร์"]},
     ]},
+    {"name": "Live Talk vs กรรมกรข่าว", "programs": [
+        {"name": "ไทยรัฐ · Live Talk (09:00-09:30)", "channel": "ThaiRath News", "kw": ["ข่าวเช้าหัวเขียว", "ห้องข่าวหัวเขียว"], "window": ["09:00", "09:30"]},
+        {"name": "สรยุทธ · Live กรรมกรข่าว คุยนอกจอ", "channel": "สรยุทธ กรรมกรข่าว", "kw": ["กรรมกรข่าว คุยนอกจอ"]},
+    ]},
 ]
 
 
@@ -187,22 +191,37 @@ def api_slot_compare():
                 if latest_end is None or s["end"] > latest_end:
                     latest_end = s["end"]
                     latest_title = s["title"]
+                # time window: จับเฉพาะช่วงเวลา (เช่น Live Talk 09:00-09:30) ถ้าตั้ง "window"
+                if prog.get("window"):
+                    w0, w1 = prog["window"]
+                    pts = [tv for tv in s["points"] if w0 <= tv[0].split(" ")[1][:5] <= w1]
+                    if not pts:
+                        continue
+                    eff = {
+                        "peak": max(v for _, v in pts),
+                        "start": min(p[0] for p in pts).split(" ")[1][:5],
+                        "end": max(p[0] for p in pts).split(" ")[1][:5],
+                        "points": pts,
+                    }
+                else:
+                    eff = {"peak": s["peak"], "start": s["start"].strftime("%H:%M"),
+                           "end": s["end"].strftime("%H:%M"), "points": s["points"]}
                 e = days.get(s["date"])
                 if e is None:
                     e = days[s["date"]] = {
-                        "peak": s["peak"],
-                        "start": s["start"].strftime("%H:%M"),
-                        "end": s["end"].strftime("%H:%M"),
+                        "peak": eff["peak"],
+                        "start": eff["start"],
+                        "end": eff["end"],
                         "curve": {},
                     }
                 else:
-                    e["peak"] = max(e["peak"], s["peak"])
-                    if s["start"].strftime("%H:%M") < e["start"]:
-                        e["start"] = s["start"].strftime("%H:%M")
-                    if s["end"].strftime("%H:%M") > e["end"]:
-                        e["end"] = s["end"].strftime("%H:%M")
+                    e["peak"] = max(e["peak"], eff["peak"])
+                    if eff["start"] < e["start"]:
+                        e["start"] = eff["start"]
+                    if eff["end"] > e["end"]:
+                        e["end"] = eff["end"]
                 # per-day concurrent curve: sum viewers ของทุก stream ที่ match ตาม HH:MM
-                for tv in s["points"]:
+                for tv in eff["points"]:
                     hhmm = tv[0].split(" ")[1][:5]
                     e["curve"][hhmm] = e["curve"].get(hhmm, 0) + tv[1]
             progs.append({
