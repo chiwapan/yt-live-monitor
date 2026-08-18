@@ -85,7 +85,7 @@ SLOTS = [
         {"name": "ช่อง8 Thai Ch8 · คนดังนั่งเคลียร์", "channel": "ช่อง8 Thai Ch8", "kw": ["คนดังนั่งเคลียร์"]},
     ]},
     {"name": "Live Talk (08:30-09:00) vs กรรมกรข่าว", "programs": [
-        {"name": "ไทยรัฐ · Live Talk ออนไลน์ (08:30-09:00)", "channel": "ThaiRath News", "kw": ["ข่าวเช้าหัวเขียว", "ห้องข่าวหัวเขียว"], "window": ["08:30", "09:00"]},
+        {"name": "ไทยรัฐ · Live Talk ออนไลน์ (08:30-09:00)", "channel": "ThaiRath News", "kw": ["ข่าวเช้าหัวเขียว", "ห้องข่าวหัวเขียว"], "window": ["08:30", "09:00"], "weekdays": [0, 1, 2, 3]},
         {"name": "สรยุทธ · กรรมกรข่าว คุยนอกจอ", "channel": "สรยุทธ กรรมกรข่าว", "kw": ["กรรมกรข่าว คุยนอกจอ"], "window": ["08:30", "09:00"]},
     ]},
 ]
@@ -187,6 +187,10 @@ def api_slot_compare():
                         continue
                     if not any(k in s["title"] for k in prog["kw"]):
                         continue
+                # weekday filter: จับเฉพาะบางวันในสัปดาห์ (เช่น Live Talk ไทยรัฐ Mon-Thu เท่านั้น)
+                # s["end"] เป็น datetime → .weekday() Mon=0 ... Sun=6
+                if prog.get("weekdays") and s["end"].weekday() not in prog["weekdays"]:
+                    continue
                 # track วิดีโอล่าสุด (end หลังสุด) ของโปรแกรมนี้ → ใช้ title เป็นชื่อแสดง
                 if latest_end is None or s["end"] > latest_end:
                     latest_end = s["end"]
