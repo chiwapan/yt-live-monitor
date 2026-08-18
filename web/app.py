@@ -196,9 +196,13 @@ def api_slot_compare():
                     latest_end = s["end"]
                     latest_title = s["title"]
                 # time window: จับเฉพาะช่วงเวลา (เช่น Live Talk 09:00-09:30) ถ้าตั้ง "window"
+                # หัวใจ: normalize ชั่วโมงเป็น 2 หลักก่อน string-compare (รองรับ '8:30' ไม่ pad จาก Sheets)
                 if prog.get("window"):
                     w0, w1 = prog["window"]
-                    pts = [tv for tv in s["points"] if w0 <= tv[0].split(" ")[1][:5] <= w1]
+                    def _hhmm(ts):
+                        hh, mm, *_ = ts.split(" ")[1].split(":")
+                        return f"{int(hh):02d}:{mm}"
+                    pts = [tv for tv in s["points"] if w0 <= _hhmm(tv[0]) <= w1]
                     if not pts:
                         continue
                     eff = {
