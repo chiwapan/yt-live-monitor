@@ -249,7 +249,11 @@ def api_slot_compare():
 @app.route("/api/live-data")
 def api_live_data():
     """Read JSONL, group by channel → stream, return for Chart.js.
-    ?date=YYYY-MM-DD filters to one day (local ts). Omit = all data."""
+    ?date=YYYY-MM-DD  : คืนแค่วันที่ระบุ (หน้า overview/เลือกวัน)
+    ?recent_days=N   : คืน N วันล่สุด (เดิม = all ถ้าใส่ 0 หรือไม่ใส่)
+                       default=0 (backward compatible); frontendเปิดครั้งแรกใช้ 7
+                       ลด 6MB → ~600KB เมื่อเปิด live-monitor (เดิม fetch full)
+    """
     from collections import defaultdict
 
     def parse_ts(ts):
@@ -269,11 +273,31 @@ def api_live_data():
                 return None
 
     date_filter = request.args.get("date", "")
+    # recent_days = N วันล่สุด (default 0 = all, backward compatible)
+    # หน้า live-monitorเปิดครั้งแรกใช้ค่า 7 → ลด 6MB→~600KB (เดิม fetch full 6MB)
+    recent_days = int(request.args.get("recent_days", default="0") or "0")
     streams = defaultdict(lambda: defaultdict(list))  # channel → video_id → [points]
     stream_meta = {}  # video_id → {title, channel, url, actual_start}
     last_dt = None
     total = 0
     available_dates = set()
+
+    # recent_days filter: ต้องรู้วันไหนเป็นล่สุดก่อนถึงคัด N วันได้ → 2-pass
+    # Pass 1: เก็บ available_dates (ใช้ regex แยก ts เฉพาะ แทน json.loadsเต็ม row →เร็วกว่า)
+    recent_dates_set = None
+    if recent_days > 0 and not date_filter:
+        ts_re = re.compile(r'"ts":\s*"([^"]{10})')  # จับแค่วัน (YYYY-MM-DD)
+        try:
+            with open(LIVE_JSONL) as f:
+                for line in f:
+                    m = ts_re.search(line)
+                    if m:
+                        available_dates.add(m.group(1))
+        except FileNotFoundError:
+            pass
+        if available_dates:
+            sorted_dates = sorted(available_dates, reverse=True)
+            recent_dates_set = set(sorted_dates[:recent_days])
 
     try:
         with open(LIVE_JSONL) as f:
@@ -291,6 +315,10 @@ def api_live_data():
                     available_dates.add(dt.strftime("%Y-%m-%d"))
                 if date_filter:
                     if not dt or dt.strftime("%Y-%m-%d") != date_filter:
+                        continue
+                elif recent_dates_set is not None:
+                    day = ts.split(" ")[0]
+                    if day not in recent_dates_set:
                         continue
                 total += 1
                 ch = d.get("channel", "Unknown")

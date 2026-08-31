@@ -853,13 +853,15 @@ function render(){
 async function load(){
   try{
     if(DATE === null){
-      // โหลดครั้งแรก: หาวันที่ล่าสุด แล้วดึงเฉพาะวันนั้น (ดูวันต่อวัน)
-      const r0 = await fetch('/api/live-data');
+      // Optimization (2026-08-31): ใช้ ?recent_days=7 แทน full 6MB — เราต้องการแค่
+      // d0.dates (รายชื่อวัน) เพื่อเลือก DATE เท่านั้น ไม่ใช่ข้อมูล streams ทั้งหมด
+      // ลด ~6MB → ~600KBบนมือถือ (เดิม fetch full → 5-7s ค้าง loading)
+      const r0 = await fetch('/api/live-data?recent_days=7');
       const d0 = await r0.json();
       DATE = (d0.dates||[])[0] || '';
     }
-    if(VIEW==='compare') SLOTCMP = null;  // refresh ข้อมูลเปรียบเทียบทุกรอบ
-    const url = '/api/live-data' + (DATE?('?date='+DATE):'');
+    if(VIEW==='compare') SLOTCMP = null;
+    const url = '/api/live-data' + (DATE?('?date='+DATE):'?recent_days=7');
     const r = await fetch(url);
     DATA = await r.json();
 
