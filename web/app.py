@@ -610,8 +610,7 @@ def api_views_today():
             "is_short": bool(meta.get("is_short_est")),
             "published_at": meta.get("published_at", ""),
         })
-    # จำกัดไว้ที่ 20 รายการล่าสุด (ลด payload)
-    videos = videos[:20]
+    # ไม่ cap payload — user อยากเห็นทั้งหมด (snapshot list ของวันนี้)
     return jsonify({
         "date": today,
         "total_videos": len(videos),
