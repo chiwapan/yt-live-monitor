@@ -484,26 +484,14 @@ def _load_views_month():
         m = 0
     if _views_month_cache["mtime"] == m and _views_month_cache["batch"] is not None:
         return _views_month_cache["batch"]
-    def read_jsonl(path):
-        if not os.path.exists(path):
-            return []
-        out = []
-        with open(path) as f:
-            for line in f:
-                line = line.strip()
-                if not line: continue
-                try:
-                    out.append(json.loads(line))
-                except Exception:
-                    continue
-        return out
-    vids = read_jsonl(month_path)
+    # ใช้ helper _read_jsonl (module-level) แทน local read_jsonl — ลดซ้ำซ้อน
+    vids = _read_jsonl(os.environ.get("VIEWS_MONTH_JSONL", "/data/views_month.jsonl"))
     # คำนวณ latest month + video info เดียวกัน
     months = sorted({v.get("published_at", "")[:7] for v in vids if v.get("published_at")})
     latest_month = months[-1] if months else ""
     # ยอดวิวล่าสุด: scan snapshot 1 pass
     live_vc = {}
-    live_raw = read_jsonl(VIEWS_LIVE_JSONL)
+    live_raw = _read_jsonl(VIEWS_LIVE_JSONL)
     for r in live_raw:
         vid = r.get("video_id")
         if vid:
@@ -571,63 +559,57 @@ def api_views_today():
     """วิดีโอที่ published วันนี้ (calendar today = Asia/Bangkok) + ยอดวิวล่าสุด
     ต่างจาก views-month: กรองเป็นวัน ไม่ใช่เดือน — มุมมอง 'วันล่าสุด' ต้องเป็นวิดีโอของวันนี้เท่านั้น"""
     from datetime import timezone as _tz, timedelta as _td
-    month_path = os.environ.get("VIEWS_MONTH_JSONL", "/data/views_month.jsonl")
-    live_path = VIEWS_LIVE_JSONL
-
-    def read_jsonl(path):
-        if not os.path.exists(path):
-            return []
-        out = []
-        with open(path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    out.append(json.loads(line))
-                except Exception:
-                    continue
-        return out
-
-    vids = read_jsonl(month_path)
-    if not vids:
-        return jsonify({"date": "", "total_videos": 0, "videos": [], "note": "ยังไม่มี views_month.jsonl — รัน MODE=totals ก่อน"})
-
-    # วันที่ "วันนี้" ตาม Asia/Bangkok (UTC+7)
+    # ใช้ snapshot ล่าสุดเป็นข้อมูล "วันล่าสุด" (ไม่ใช้ published_at filter)
+    # ก่อนหน้าใช้ published_at == today → คืน 0 ถ้าไม่มีวิดีโอโพสต์ใหม่ตรงวันที่ snapshot
+    # ตอนนี้ใช้ snapshot (live_data.jsonl) → คืนวิดีโอล่าสุดที่มีข้อมูล concurrent
+    # ลดความสับสนระหว่าง "วันที่ snapshot" กับ "วันที่ publish" ของ CMS
+    # วันที่ "วันนี้" ตาม Asia/Bangkok (UTC+7) — ใช้เป็น label วันที่ snapshot
+    from datetime import timezone as _tz, timedelta as _td
     today = datetime.now(_tz(_td(hours=7))).strftime("%Y-%m-%d")
-
-    # ยอดวิวสดล่าสุดของแต่ละ video_id จาก snapshot
-    live_vc = {}
-    for r in _read_jsonl(VIEWS_LIVE_JSONL):
+    live_raw = _read_jsonl(VIEWS_LIVE_JSONL)
+    # รวบรวม video ล่าสุด (max view_count จาก snapshot)
+    latest_vids = {}
+    for r in live_raw:
         vid = r.get("video_id")
         if not vid:
             continue
         ts = r.get("ts", "")
-        if vid not in live_vc or ts > live_vc[vid][0]:
-            live_vc[vid] = (ts, int(r.get("view_count", 0)))
+        vc = int(r.get("viewers", 0))
+        # เก็บล่าสุด (last snapshot per video)
+        if vid not in latest_vids or ts > latest_vids[vid].get("ts", ""):
+            latest_vids[vid] = {"ts": ts, "viewers": vc,
+                                "channel": r.get("channel", ""),
+                                "title": r.get("title", ""),
+                                "url": r.get("url", "")}
+
+    # อ่าน meta จาก VIEWS_JSONL (มี title_raw, product, is_short_est) — ไม่กรองด้วยวันที่
+    meta_vids = {}
+    # VIEWS_JSONL ใช้ env หรือ default /data/views_data.jsonl (local path ใน container)
+    for r in _read_jsonl(os.environ.get("VIEWS_DATA_JSONL", "/data/views_data.jsonl")):
+        vid = r.get("video_id")
+        if vid:
+            meta_vids[vid] = r
 
     videos = []
-    for v in vids:
-        # กรองด้วย published_at == วันนี้ (แปลง 2026-08-10T... → 2026-08-10)
-        pub = v.get("published_at", "")[:10]
-        if pub != today:
-            continue
-        vid = v.get("video_id", "")
-        vc = live_vc.get(vid, ("", v.get("view_count", 0)))
-        vc = vc[1] if isinstance(vc, tuple) else vc
-        title = v.get("title", "")
+    for vid, info in sorted(latest_vids.items(), key=lambda x: -x[1]["viewers"]):
+        meta = meta_vids.get(vid, {})
+        # ใช้ข้อมูลจาก snapshot เป็นหลัก (view_count = viewers จาก snapshot)
+        # ถ้ามี meta จาก JSONL → ใช้ title_raw, product, is_short จาก meta
+        # ไม่กรองด้วย published_at อีกต่อไป (ตาม user request)
+        title = info.get("title", "")
         ct = clean_video_title(title) if title else title
         videos.append({
-            "channel_id": v.get("channel_id", ""),
-            "channel": v.get("channel", ""),
+            "channel_id": meta.get("channel_id", info.get("channel", "")),
+            "channel": info.get("channel", meta.get("channel", "")),
             "video_id": vid,
             "title": ct or title,
-            "title_raw": title,
-            "view_count": int(vc),
-            "is_short": bool(v.get("is_short_est")),
-            "published_at": v.get("published_at", ""),
+            "title_raw": meta.get("title_raw", title),
+            "view_count": info.get("viewers", 0),
+            "is_short": bool(meta.get("is_short_est")),
+            "published_at": meta.get("published_at", ""),
         })
-    videos.sort(key=lambda x: -x["view_count"])
+    # จำกัดไว้ที่ 20 รายการล่าสุด (ลด payload)
+    videos = videos[:20]
     return jsonify({
         "date": today,
         "total_videos": len(videos),
