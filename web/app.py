@@ -616,14 +616,18 @@ def api_views_today():
     })
 
 
-@app.route("/api/views-data")
-def api_views_data():
-    """อ่าน views_data.jsonl (batch รายวันจาก Analytics ถ้ามี) + views_live.jsonl (snapshot สด)
-    ถ้าไม่มี batch (CMS บล็อก) → คำนวณรายวันจาก snapshot history แทน (ไม่ต้อง CMS)"""
-    def read_jsonl(path):
-        if not os.path.exists(path):
-            return []
-        out = []
+# --- views-data cache (2026-08-31) ---
+# mtime-based cache เพื่อลด response time 8-21s → <0.1s หลัง request แรก
+# ไฟล์ views_data.jsonl + views_live.jsonl append ทุก 5 นาที — mtime change → invalidate
+_views_data_cache = {"mtime": 0, "batch": None, "last_live": ""}
+
+
+def _read_jsonl(path):
+    """Read JSONL file safely."""
+    if not os.path.exists(path):
+        return []
+    out = []
+    try:
         with open(path) as f:
             for line in f:
                 line = line.strip()
@@ -633,16 +637,40 @@ def api_views_data():
                     out.append(json.loads(line))
                 except Exception:
                     continue
-        return out
+    except OSError:
+        pass
+    return out
 
-    batch = read_jsonl(VIEWS_JSONL)
-    live = read_jsonl(VIEWS_LIVE_JSONL)
-    last_live = live[-1]["ts"] if live else ""
-    last_batch = batch[-1]["date"] if batch else ""
 
-    # ถ้าไม่มี batch จริง (CMS บล็อก) → สังเคราะห์รายวันจาก snapshot history
+def _load_views_batch():
+    """Load batch + last_live from jsonl files. Cached by mtime."""
+    global _views_data_cache
+    try:
+        m1 = os.path.getmtime(VIEWS_JSONL) if os.path.exists(VIEWS_JSONL) else 0
+    except OSError:
+        m1 = 0
+    try:
+        m2 = os.path.getmtime(VIEWS_LIVE_JSONL) if os.path.exists(VIEWS_LIVE_JSONL) else 0
+    except OSError:
+        m2 = 0
+    combined = (m1, m2)
+    if _views_data_cache["mtime"] == combined and _views_data_cache["batch"] is not None:
+        return _views_data_cache["batch"], _views_data_cache["last_live"]
+    live = _read_jsonl(VIEWS_LIVE_JSONL)
+    batch = _read_jsonl(VIEWS_JSONL)
     if not batch and live:
         batch = compute_daily_from_snapshot(live)
+    last_live = live[-1]["ts"] if live else ""
+    _views_data_cache = {"mtime": combined, "batch": batch, "last_live": last_live}
+    return batch, last_live
+
+
+@app.route("/api/views-data")
+def api_views_data():
+    """อ่าน views_data.jsonl (batch รายวันจาก Analytics ถ้ามี) + views_live.jsonl (snapshot สด)
+    ถ้าไม่มี batch (CMS บล็อก) → คำนวณรายวันจาก snapshot history แทน (ไม่ต้อง CMS)"""
+    batch, last_live = _load_views_batch()
+    last_batch = batch[-1]["date"] if batch else ""
 
     # Optimization (2026-08-31): ตัด fields ที่ frontend ไม่ใช้จริง
     # (grep frontend ใช้แค่: video_id, channel_id, channel, title, title_raw, view_count, views, date, is_short, product)
