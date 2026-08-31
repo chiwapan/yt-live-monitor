@@ -281,6 +281,10 @@ def api_live_data():
                 return None
 
     # Cache: ใช้ mtime เป็น key ล้างเมื่อไฟล์เปลี่ยน
+    # ต้องประกาศ global ที่จุดเริ่มต้น —เพราะมี _live_data_cache = {...} assignment
+    # ใน cache-miss block ทำให้ Python mark เป็น local; ถ้าไม่ declare ก่อน
+    # จะ UnboundLocalError ตอน read
+    global _live_data_cache
     try:
         file_mtime = os.path.getmtime(LIVE_JSONL)
     except OSError:
