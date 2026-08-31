@@ -579,7 +579,8 @@ def api_views_today():
         # เก็บล่าสุด (last snapshot per video)
         if vid not in latest_vids or ts > latest_vids[vid].get("ts", ""):
             latest_vids[vid] = {"ts": ts, "viewers": vc,
-                                "channel": r.get("channel", ""),
+                                "channel_id": r.get("channel_id", ""),  # UCxxxxx
+                                "channel": r.get("channel", ""),          # ชื่อช่อง
                                 "title": r.get("title", ""),
                                 "url": r.get("url", "")}
 
@@ -594,14 +595,14 @@ def api_views_today():
     videos = []
     for vid, info in sorted(latest_vids.items(), key=lambda x: -x[1]["viewers"]):
         meta = meta_vids.get(vid, {})
-        # ใช้ข้อมูลจาก snapshot เป็นหลัก (view_count = viewers จาก snapshot)
-        # ถ้ามี meta จาก JSONL → ใช้ title_raw, product, is_short จาก meta
-        # ไม่กรองด้วย published_at อีกต่อไป (ตาม user request)
+        # channel_id = UCxxxxx (YouTube ID) — จาก snapshot ก่อน, fallback จาก meta
+        ch_id = info.get("channel_id") or meta.get("channel_id", "")
+        ch_name = info.get("channel") or meta.get("channel", "")
         title = info.get("title", "")
         ct = clean_video_title(title) if title else title
         videos.append({
-            "channel_id": meta.get("channel_id", info.get("channel", "")),
-            "channel": info.get("channel", meta.get("channel", "")),
+            "channel_id": ch_id,            # ต้องเป็น UCxxxxx
+            "channel": ch_name,              # ชื่อช่อง (แสดงผล)
             "video_id": vid,
             "title": ct or title,
             "title_raw": meta.get("title_raw", title),
