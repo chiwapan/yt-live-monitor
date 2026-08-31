@@ -335,6 +335,36 @@ def api_live_data():
             ch_peak = max(ch_peak, peak)
             meta = stream_meta.get(vid, {})
             raw_title = meta.get("title", vid)
+            # ── Aggregate optimization (2026-08-31) ──
+            # When called without ?date filter (default view, first-load),
+            # frontend shows channel cards + leaderboards — does NOT need
+            # every 5-minute point of every historical stream. Aggregate
+            # points to 1-per-hour for non-live streams to cut payload
+            # ~70% (4MB → 1MB). Live streams keep every point so chart
+            # animates correctly. When ?date is specified, user is doing
+            # drilldown → keep full resolution.
+            if not date_filter and not is_live:
+                agg_points = []
+                cur_hour = None
+                cur_peak_v = 0
+                cur_peak_ts = ""
+                for p in points:
+                    h = p["ts"][:13]  # 'YYYY-MM-DD HH'
+                    if h != cur_hour:
+                        if cur_hour is not None:
+                            agg_points.append({"ts": cur_peak_ts, "viewers": cur_peak_v})
+                        cur_hour = h
+                        cur_peak_v = p["viewers"]
+                        cur_peak_ts = p["ts"]
+                    else:
+                        if p["viewers"] > cur_peak_v:
+                            cur_peak_v = p["viewers"]
+                            cur_peak_ts = p["ts"]
+                if cur_hour is not None:
+                    agg_points.append({"ts": cur_peak_ts, "viewers": cur_peak_v})
+                points_out = agg_points
+            else:
+                points_out = [{"ts": p["ts"], "viewers": p["viewers"]} for p in points]
             ch_streams.append({
                 "video_id": vid,
                 "title": raw_title,
@@ -345,7 +375,7 @@ def api_live_data():
                 "start_ts": points[0]["ts"],
                 "end_ts": last_pt["ts"],
                 "is_live": is_live,
-                "points": [{"ts": p["ts"], "viewers": p["viewers"]} for p in points],
+                "points": points_out,
             })
         # Sort: live first, then by peak desc
         ch_streams.sort(key=lambda s: (not s["is_live"], -s["peak"]))
