@@ -37,6 +37,11 @@ VIEWS_LIVE_JSONL = os.environ.get(
 )
 
 
+# --- Cache for /api/live-data (2026-08-31) ---
+# keyed by mtime of live_data.jsonl — invalidate เมื่อไฟล์ append ใหม่ (cronทุก 5นาที)
+_live_data_cache: dict = {"mtime": 0, "data": None}
+
+
 @app.route("/api/ping")
 def api_ping():
     return jsonify({"status": "ok", "ts": datetime.now(timezone.utc).isoformat()})
@@ -253,6 +258,9 @@ def api_live_data():
     ?recent_days=N   : คืน N วันล่สุด (เดิม = all ถ้าใส่ 0 หรือไม่ใส่)
                        default=0 (backward compatible); frontendเปิดครั้งแรกใช้ 7
                        ลด 6MB → ~600KB เมื่อเปิด live-monitor (เดิม fetch full)
+
+    Optimization (2026-08-31 #3): cached_load() เก็บ parsed data + mtime
+    ลดเวลา 1.4-3.7s → 0.1s หลัง request แรก (jsonl append ทุก 5 นาทีเท่านั้น)
     """
     from collections import defaultdict
 
@@ -272,69 +280,88 @@ def api_live_data():
             except Exception:
                 return None
 
-    date_filter = request.args.get("date", "")
-    # recent_days = N วันล่สุด (default 0 = all, backward compatible)
-    # หน้า live-monitorเปิดครั้งแรกใช้ค่า 7 → ลด 6MB→~600KB (เดิม fetch full 6MB)
-    recent_days = int(request.args.get("recent_days", default="0") or "0")
-    streams = defaultdict(lambda: defaultdict(list))  # channel → video_id → [points]
-    stream_meta = {}  # video_id → {title, channel, url, actual_start}
-    last_dt = None
-    total = 0
-    available_dates = set()
+    # Cache: ใช้ mtime เป็น key ล้างเมื่อไฟล์เปลี่ยน
+    try:
+        file_mtime = os.path.getmtime(LIVE_JSONL)
+    except OSError:
+        return jsonify({"channels": {}, "last_ts": "", "total_samples": 0, "dates": []})
 
-    # recent_days filter: ต้องรู้วันไหนเป็นล่สุดก่อนถึงคัด N วันได้ → 2-pass
-    # Pass 1: เก็บ available_dates (ใช้ regex แยก ts เฉพาะ แทน json.loadsเต็ม row →เร็วกว่า)
-    recent_dates_set = None
-    if recent_days > 0 and not date_filter:
-        ts_re = re.compile(r'"ts":\s*"([^"]{10})')  # จับแค่วัน (YYYY-MM-DD)
+    if _live_data_cache["mtime"] != file_mtime or _live_data_cache["data"] is None:
+        # Cache miss — full reload + group ครั้งเดียว
+        cached = {
+            "streams": defaultdict(lambda: defaultdict(list)),
+            "stream_meta": {},
+            "last_dt": None,
+            "available_dates": set(),
+            "raw_rows": [],  # เก็บ raw (channel, video_id, ts_dt, ts_str) ไว้ — filter ภายหลังได้
+        }
         try:
             with open(LIVE_JSONL) as f:
                 for line in f:
-                    m = ts_re.search(line)
-                    if m:
-                        available_dates.add(m.group(1))
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        d = json.loads(line)
+                    except Exception:
+                        continue
+                    ts = d.get("ts", "")
+                    dt = parse_ts(ts)
+                    if dt:
+                        cached["available_dates"].add(dt.strftime("%Y-%m-%d"))
+                    ch = d.get("channel", "Unknown")
+                    vid = d.get("video_id", "")
+                    cached["raw_rows"].append({
+                        "ts": ts,
+                        "dt": dt,
+                        "ch": ch,
+                        "vid": vid,
+                        "viewers": d.get("viewers", 0),
+                        "title": d.get("title", ""),
+                        "url": d.get("url", ""),
+                        "actual_start": d.get("actual_start", ""),
+                    })
+                    if dt and (cached["last_dt"] is None or dt > cached["last_dt"]):
+                        cached["last_dt"] = dt
         except FileNotFoundError:
-            pass
-        if available_dates:
-            sorted_dates = sorted(available_dates, reverse=True)
-            recent_dates_set = set(sorted_dates[:recent_days])
+            return jsonify({"channels": {}, "last_ts": "", "total_samples": 0, "dates": []})
 
-    try:
-        with open(LIVE_JSONL) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    d = json.loads(line)
-                except Exception:
-                    continue
-                ts = d.get("ts", "")
-                dt = parse_ts(ts)
-                if dt:
-                    available_dates.add(dt.strftime("%Y-%m-%d"))
-                if date_filter:
-                    if not dt or dt.strftime("%Y-%m-%d") != date_filter:
-                        continue
-                elif recent_dates_set is not None:
-                    day = ts.split(" ")[0]
-                    if day not in recent_dates_set:
-                        continue
-                total += 1
-                ch = d.get("channel", "Unknown")
-                vid = d.get("video_id", "")
-                streams[ch][vid].append({"ts": ts, "dt": dt, "viewers": d["viewers"]})
-                stream_meta[vid] = {
-                    "title": d.get("title", ""),
-                    "channel": ch,
-                    "url": d.get("url", ""),
-                    "actual_start": d.get("actual_start", ""),
-                }
-                if dt and (last_dt is None or dt > last_dt):
-                    last_dt = dt
+        _live_data_cache = {"mtime": file_mtime, "data": cached}
+    cached = _live_data_cache["data"]
 
-    except FileNotFoundError:
-        return jsonify({"channels": {}, "last_ts": "", "total_samples": 0, "dates": []})
+    date_filter = request.args.get("date", "")
+    recent_days = int(request.args.get("recent_days", default="0") or "0")
+    # คำนวณ recent_dates_set (cached — ถ้าเปลี่ยน recent_days ก็คำนวณใหม่)
+    if date_filter:
+        recent_dates_set = {date_filter}
+    elif recent_days > 0:
+        sorted_dates = sorted(cached["available_dates"], reverse=True)
+        recent_dates_set = set(sorted_dates[:recent_days])
+    else:
+        recent_dates_set = None  # all
+
+    # Single-pass filter จาก cached raw_rows
+    streams = defaultdict(lambda: defaultdict(list))
+    stream_meta = {}
+    total = 0
+    for r in cached["raw_rows"]:
+        if recent_dates_set is not None:
+            day = r["ts"].split(" ")[0] if r["ts"] else ""
+            if day not in recent_dates_set:
+                continue
+        total += 1
+        streams[r["ch"]][r["vid"]].append({
+            "ts": r["ts"], "dt": r["dt"], "viewers": r["viewers"]
+        })
+        stream_meta[r["vid"]] = {
+            "title": r["title"],
+            "channel": r["ch"],
+            "url": r["url"],
+            "actual_start": r["actual_start"],
+        }
+
+    last_dt = cached["last_dt"]
+    available_dates = cached["available_dates"]
 
     # "current" = stream มีข้อมูลใน 12 นาทีล่าสุดของเวลาจริง (cron เก็บทุก 5 นาที)
     # margin 12นาที > round 5นาที กัน false 0 LIVE ตอน collector delay
