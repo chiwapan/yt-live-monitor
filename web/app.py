@@ -444,7 +444,6 @@ def api_views_month():
             "title": ct or title,
             "title_raw": title,
             "view_count": int(vc),
-            "like_count": int(v.get("like_count", 0)),
             "is_short": bool(v.get("is_short_est")),
             "published_at": v.get("published_at", ""),
         })
@@ -516,7 +515,6 @@ def api_views_today():
             "title": ct or title,
             "title_raw": title,
             "view_count": int(vc),
-            "like_count": int(v.get("like_count", 0)),
             "is_short": bool(v.get("is_short_est")),
             "published_at": v.get("published_at", ""),
         })
@@ -556,6 +554,17 @@ def api_views_data():
     # ถ้าไม่มี batch จริง (CMS บล็อก) → สังเคราะห์รายวันจาก snapshot history
     if not batch and live:
         batch = compute_daily_from_snapshot(live)
+
+    # Optimization (2026-08-31): ตัด fields ที่ frontend ไม่ใช้จริง
+    # (grep frontend ใช้แค่: video_id, channel_id, channel, title, title_raw, view_count, views, date, is_short, product)
+    # ตัด: estimated_revenue, subs_gained, subs_lost, avg_view_dur, watch_time_min
+    # batch ที่มาจาก compute_daily_from_snapshot ตัดไปแล้วตอนสร้าง แต่ batch จาก views_data.jsonl ต้อง filter ตอนนี้
+    # ประหยัด: 51MB → ~30MB (ลด ~40% โดยไม่กระทบ UX)
+    KEEP_BATCH_FIELDS = {"date", "channel_id", "channel", "video_id", "title", "title_raw",
+                          "view_count", "views", "is_short", "product"}
+    if batch and batch[0].keys() - KEEP_BATCH_FIELDS:
+        # เฉพาะกรณีที่ batch มาจาก views_data.jsonl (มี field เกิน) — filter
+        batch = [{k: v for k, v in row.items() if k in KEEP_BATCH_FIELDS} for row in batch]
 
     # IMPORTANT: อย่าส่ง raw `live` array เต็ม (180K+ แถว ≈ 114MB) เข้าเบราว์เซอร์ —
     # frontend ใช้แค่ RAW.batch (daily) + last_live timestamp, ไม่ได้แตะ RAW.live เลย
@@ -619,8 +628,6 @@ def compute_daily_from_snapshot(live):
                 "video_id": vid, "title": title or "",
                 "product": "SHORTS" if is_short else "CORE",
                 "views": daily,
-                "estimated_revenue": 0.0, "subs_gained": 0, "subs_lost": 0,
-                "avg_view_dur": 0, "watch_time_min": 0,
             })
     return rows
 
