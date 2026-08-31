@@ -853,19 +853,24 @@ function render(){
 async function load(){
   try{
     if(DATE === null){
-      // Optimization (2026-08-31): ใช้ ?recent_days=7 แทน full 6MB — เราต้องการแค่
-      // d0.dates (รายชื่อวัน) เพื่อเลือก DATE เท่านั้น ไม่ใช่ข้อมูล streams ทั้งหมด
-      // ลด ~6MB → ~600KBบนมือถือ (เดิม fetch full → 5-7s ค้าง loading)
+      // Optimization v2 (2026-08-31 #2): ใช้ ?recent_days=7 เป็นหลัก
+      // เดิมมาแรกใช้ d0เพื่อเก็บ d0.datesแล้วค่อย fetch ?date=DATE อีกครั้ง (=2 fetch)
+      // ตอนนี้ใช้ ?recent_days=7 =มีข้อมูล 7 วันพร้อม streams →ไม่ต้อง fetchวันเดิมซ้ำ
+      // แค่ filter client-side เป็นวันล่มาสุด
       const r0 = await fetch('/api/live-data?recent_days=7');
       const d0 = await r0.json();
       DATE = (d0.dates||[])[0] || '';
+      // ใช้ d0เป็น DATA ตรง (มีข้อมูล 7 วัน) → render ได้เลย ไม่ต้อง fetchอีก
+      DATA = d0;
+    } else if (!DATA) {
+      // หาก DATE มีค่าแต่ DATA ไม่มี (เช่นเปลี่ยนวันจากอื่น) → fetchวันนั้น
+      const url = '/api/live-data?date='+DATE;
+      const r = await fetch(url);
+      DATA = await r.json();
     }
     if(VIEW==='compare') SLOTCMP = null;
-    const url = '/api/live-data' + (DATE?('?date='+DATE):'?recent_days=7');
-    const r = await fetch(url);
-    DATA = await r.json();
-
-    // date selector — แสดงเฉพาะ 14 วันล่าสุด + ปุ่ม ‹ › เลื่อนวัน
+    // NOTE: url มาก่อนใช้สำหรับ fetchอีกครั้งถ้าจำเป็น — ปัจจุบันไม่ใช้เลยเพราะ
+    // DATAถูกตั้งให้แล้ว (d0หรือ fetchแยก)
     const sel = document.getElementById('dateSel');
     const dates14 = (DATA.dates||[]).slice(0,14);
     sel.innerHTML = '<option value="">ทั้งหมด</option>' +

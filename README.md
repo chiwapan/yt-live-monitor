@@ -5,33 +5,29 @@ and serve a real-time dashboard at `/live-monitor`.
 
 **Standalone since 2026-08-03** — แยกออกจาก Hermes dashboard แล้ว, deploy ไป Amazon ได้ทั้งก้อน
 
-## Components
+## Components (อัปเดต 2026-08-09 — ไม่มี docker แล้ว รันเป็น native process + Hermes cron)
 
-| ส่วน | ไฟล์ | หน้าที่ |
-|------|------|--------|
-| Poller | `yt-live-daily.py` | ดึง concurrent viewers ทุก 5 นาที → Google Sheets + `live_data.jsonl` |
-| Dashboard | `web/app.py` | Flask app: `/live-monitor`, `/api/live-data`, `/api/ping` |
-| Backfill | `backfill_*.py` | เติมข้อมูลย้อนหลังจาก Playboard / Studio CSV |
+| ส่วน | ไฟล์ | หน้าที่ | เรียกโดย |
+|------|------|--------|---------|
+| Poller (live concurrent) | `yt-live-daily.py` | ดึง concurrent viewers ทุก 5 นาที → Google Sheets + `live_data.jsonl` | Hermes cron `yt-live-daily.sh` (subprocess สั้นๆ ไม่ใช่ process เดินพื้นหลัง) |
+| Poller (views snapshot) | `yt-views-collector.py` MODE=snapshot | ดึง view_count สด → `views_live.jsonl` | Hermes cron `run_views_snapshot.sh` (ทุกชม.) |
+| Watchdog | `yt-live-watchdog.py` | เตือนเมื่อไฟล์ไม่ถูกเขียน | Hermes cron ทุก 2 นาที |
+| **Frontend** (หน้า `/live-monitor`) | **Streamlit `thairath-reports/scripts/dashboard.py` (port 8501)** | อ่าน jsonl โชว์ Σ concurrent | process ถาวร (ไม่ใช่ `web/app.py`) |
+| ทางเข้าโดเมน | cloudflared tunnel (pid 164483 ชี้ localhost:80 → CF ingress `/live-monitor`→8501) | `live.chiwapan.online` | process ถาวร |
 
-## Run dashboard locally
+⚠️ `web/app.py` (port 8889) คือเศษเก่า ไม่ได้ถูกเสิร์ฟแล้ว (8889/live-monitor ได้ 404) — ห้ามนำมาแก้ไขสับสน
 
-```bash
-pip install -r requirements.txt
-cd web && python3 app.py
-# PORT (default 8899), LIVE_JSONL (default ../live_data.jsonl)
-```
-
-## Docker
+## Run frontend locally (Streamlit 8501)
 
 ```bash
-docker build -t yt-live-monitor .
-docker run -d -p 8899:8899 -v /path/to/data:/data yt-live-monitor
-# mount live_data.jsonl ที่ /data/live_data.jsonl
+cd /opt/data/home/thairath-reports
+/opt/hermes/.venv/bin/streamlit run scripts/dashboard.py --server.port 8501 --server.headless true --server.address 127.0.0.1
+# หน้า /live-monitor อ่าน live_data.jsonl + views_live.jsonl
 ```
 
 ## Env vars
 
-**Dashboard:** `PORT`, `LIVE_JSONL`
+**Dashboard:** สืบทอดจาก `thairath-reports` (ไม่ได้ใช้ PORT/LIVE_JSONL ของ web/app.py)
 
 **Poller:** `YOUTUBE_API_KEY` (required), `YT_SHEET_ID` (required),
 `GAPI_SCRIPT` (path to google_api.py helper — default points to Hermes skill dir)

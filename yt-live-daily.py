@@ -106,7 +106,10 @@ STATE_FILE = os.environ.get("STATE_FILE",
 
 
 def floor_5min(dt):
-    """Floor datetime to nearest 5-minute mark (cron-aligned)."""
+    """Floor datetime: 09:00-09:35 ICT = ช่วง Live Talk ข่าวเช้า → 1 นาที (เส้นกราฟหนาขึ้น);
+    นอกนั้น 5 นาที (cron-aligned)."""
+    if dt.hour == 9 and dt.minute <= 35:
+        return dt.replace(second=0, microsecond=0)
     new_min = (dt.minute // 5) * 5
     return dt.replace(minute=new_min, second=0, microsecond=0)
 

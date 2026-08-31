@@ -471,15 +471,19 @@ def views_monitor():
         return f"Dashboard error: {e}", 500
 
 
-@app.route("/api/views-month")
-def api_views_month():
-    """คลิปที่โพสต์ในเดือนล่าสุด (ตาม published_at ใน views_month.jsonl)
-    + ยอดวิวสะสมล่าสุด (จาก snapshot views_live.jsonl ถ้ามี video_id นี้)
-    ได้ทุกช่องรวมคู่แข่ง (พึ่ง Data API ไม่ใช่ CMS)"""
-    import re as _re
-    month_path = os.environ.get("VIEWS_MONTH_JSONL", "/data/views_month.jsonl")
-    live_path = VIEWS_LIVE_JSONL
+_views_month_cache = {"mtime": 0, "batch": None}
 
+
+def _load_views_month():
+    """Load VIEWS_MONTH_JSONL + snapshot for latest views. Cached by mtime."""
+    global _views_month_cache
+    month_path = os.environ.get("VIEWS_MONTH_JSONL", "/data/views_month.jsonl")
+    try:
+        m = os.path.getmtime(month_path) if os.path.exists(month_path) else 0
+    except OSError:
+        m = 0
+    if _views_month_cache["mtime"] == m and _views_month_cache["batch"] is not None:
+        return _views_month_cache["batch"]
     def read_jsonl(path):
         if not os.path.exists(path):
             return []
@@ -487,27 +491,43 @@ def api_views_month():
         with open(path) as f:
             for line in f:
                 line = line.strip()
-                if not line:
-                    continue
+                if not line: continue
                 try:
                     out.append(json.loads(line))
                 except Exception:
                     continue
         return out
-
     vids = read_jsonl(month_path)
+    # คำนวณ latest month + video info เดียวกัน
+    months = sorted({v.get("published_at", "")[:7] for v in vids if v.get("published_at")})
+    latest_month = months[-1] if months else ""
+    # ยอดวิวล่าสุด: scan snapshot 1 pass
+    live_vc = {}
+    live_raw = read_jsonl(VIEWS_LIVE_JSONL)
+    for r in live_raw:
+        vid = r.get("video_id")
+        if vid:
+            live_vc[vid] = r.get("viewers", 0)
+    # เก็บ processed batch
+    result = {"month": latest_month, "videos": vids, "live_vc": live_vc}
+    _views_month_cache = {"mtime": m, "batch": result}
+    return result
+
+
+@app.route("/api/views-month")
+def api_views_month():
+    """คลิปที่โพสต์ในเดือนล่าสุด (ตาม published_at ใน views_month.jsonl)
+    + ยอดวิวสะสมล่าสุด (จาก snapshot views_live.jsonl ถ้ามี video_id นี้)
+    ได้ทุกช่องรวมคู่แข่ง (พึ่ง Data API ไม่ใช่ CMS)"""
+    result = _load_views_month()
+    vids = result["videos"]
+    latest_month = result["month"]
     if not vids:
         return jsonify({"month": "", "videos": [], "note": "ยังไม่มี views_month.jsonl — รัน MODE=totals ก่อน"})
 
-    # หาเดือนล่าสุดจาก published_at (รูปแบบ 2026-08-10T...)
-    months = sorted({v.get("published_at", "")[:7] for v in vids if v.get("published_at")})
-    if not months:
-        return jsonify({"month": "", "videos": [], "note": "ไม่มี published_at ในข้อมูล"})
-    latest_month = months[-1]
-
     # ยอดวิวสดล่าสุดของแต่ละ video_id จาก snapshot
     live_vc = {}
-    for r in read_jsonl(live_path):
+    for r in _read_jsonl(VIEWS_LIVE_JSONL):
         vid = r.get("video_id")
         if not vid:
             continue
@@ -578,7 +598,7 @@ def api_views_today():
 
     # ยอดวิวสดล่าสุดของแต่ละ video_id จาก snapshot
     live_vc = {}
-    for r in read_jsonl(live_path):
+    for r in _read_jsonl(VIEWS_LIVE_JSONL):
         vid = r.get("video_id")
         if not vid:
             continue
