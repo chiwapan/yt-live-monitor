@@ -292,7 +292,10 @@ let TODAY_MAP = {};   // video_id → row จาก /api/views-today (วิด�
 let state = { filter:'all', angle:'split', monthAngle:'split', page:1, pageSize:10, dFrom:null, dTo:null, tab:'latest', channels:[] };
 
 function loadData(){
-  fetch('/api/views-data').then(r=>r.json()).then(d=>{
+  // Optimization (2026-08-31): ?days=3 limits server response to 3 most-recent
+  // dates instead of all 26 (~44MB → ~1-2MB). Frontend only needs latest + prev
+  // day for delta. Keep days=3 so prev day always available.
+  fetch('/api/views-data?days=3').then(r=>r.json()).then(d=>{
     RAW = d;
     document.getElementById('loading').style.display='none';
     document.getElementById('app').style.display='block';

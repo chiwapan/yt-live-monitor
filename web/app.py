@@ -589,18 +589,28 @@ def api_views_data():
     # (grep frontend ใช้แค่: video_id, channel_id, channel, title, title_raw, view_count, views, date, is_short, product)
     # ตัด: estimated_revenue, subs_gained, subs_lost, avg_view_dur, watch_time_min
     # batch ที่มาจาก compute_daily_from_snapshot ตัดไปแล้วตอนสร้าง แต่ batch จาก views_data.jsonl ต้อง filter ตอนนี้
-    # ประหยัด: 51MB → ~30MB (ลด ~40% โดยไม่กระทบ UX)
+    # ประหยัย: 51MB → ~30MB
     KEEP_BATCH_FIELDS = {"date", "channel_id", "channel", "video_id", "title", "title_raw",
                           "view_count", "views", "is_short", "product"}
     if batch and batch[0].keys() - KEEP_BATCH_FIELDS:
-        # เฉพาะกรณีที่ batch มาจาก views_data.jsonl (มี field เกิน) — filter
         batch = [{k: v for k, v in row.items() if k in KEEP_BATCH_FIELDS} for row in batch]
 
+    # --- Optimization (2026-08-31 #2): server-side date filter ---
+    # Frontend (views_monitor.html) ใช้ batch แค่เพื่อหา "วันล่าสุด" + delta กับวันก่อนหน้า
+    # ส่งแค่วันล่าสุดหรือ 1-2 วันจก่อน → 44MB → ~2MB (95%)
+    # param ?days=N (default 3: วันนี้ + เมื่อวาน + ก่อนเมื่อวานเผื่อให้มี prev)
+    days = request.args.get("days", default=3, type=int)
+    if days > 0 and batch:
+        all_dates = sorted({r.get("date", "") for r in batch if r.get("date")})
+        # ใช้ N วันสุดท้ายจาก available dates (ไม่ใช่วันละ format เหมือนกัน)
+        cutoff_dates = set(all_dates[-days:]) if len(all_dates) > days else set(all_dates)
+        batch = [r for r in batch if r.get("date", "") in cutoff_dates]
+        last_batch = max(cutoff_dates) if cutoff_dates else last_batch
+
     # IMPORTANT: อย่าส่ง raw `live` array เต็ม (180K+ แถว ≈ 114MB) เข้าเบราว์เซอร์ —
-    # frontend ใช้แค่ RAW.batch (daily) + last_live timestamp, ไม่ได้แตะ RAW.live เลย
-    # ส่งแบบนี้ payload เล็กลงจาก 114MB → ~8.5MB หน้าไม่ค้าง
+    # frontend ใช้แค่ RAW.batch (daily) + last_live timestamp
     return jsonify({
-        "batch": batch,          # channel-level + per-video (มี date, product)
+        "batch": batch,
         "last_live": last_live,
         "last_batch": last_batch,
         "channels": None,
