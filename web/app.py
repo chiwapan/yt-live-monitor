@@ -574,7 +574,8 @@ def api_views_today():
         if not vid:
             continue
         ts = r.get("ts", "")
-        vc = int(r.get("viewers", 0))
+        # views_live.jsonl ใช้ 'view_count' (ไม่ใช่ 'viewers')
+        vc = int(r.get("view_count", 0))
         # เก็บล่าสุด (last snapshot per video)
         if vid not in latest_vids or ts > latest_vids[vid].get("ts", ""):
             latest_vids[vid] = {"ts": ts, "viewers": vc,
