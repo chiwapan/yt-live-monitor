@@ -818,51 +818,67 @@ def append_local_jsonl(live_streams, now):
     Dedupe (แก้ 2026-08-07): ถ้า tick ปกติกับ manual/grace run ชนกันที่ ts เดียวกัน
     จะได้แถวซ้ำ video_id+ts → dashboard นับซ้ำ. อ่านท้ายไฟล์มาเช็กก่อนเขียน
     (อ่านแค่ 256KB สุดท้าย = ~15 ticks พอครอบคลุมการชนกันในรอบเดียวกัน)
+
+    แก้เพิ่ม 2026-09-13: scan-then-write เฉย ๆ ยังมี race ได้ (สองรันสแกนพร้อมกัน
+    แล้วเขียนทั้งคู่) — 13/9 เจอแถวซ้ำ 20,440 แถว (17% ของไฟล์) จึงใส่
+    fcntl.flock ครอบ scan+write ให้เป็น atomic + key รวม channel
     """
+    import fcntl
+
     ts = now.strftime("%Y-%m-%d %H:%M:%S")
-    seen = set()
-    try:
-        with open(JSONL_FILE, "rb") as f:
-            f.seek(0, os.SEEK_END)
-            size = f.tell()
-            start = max(0, size - 262144)
-            f.seek(start)
-            chunk = f.read().decode("utf-8", "ignore").split("\n")
-            # ตัดบรรทัดแรกทิ้งเฉพาะตอน seek ข้ามมาจริง (อาจเป็นบรรทัดขาดครึ่ง)
-            if start > 0:
-                chunk = chunk[1:]
-            for line in chunk:
-                if not line.strip() or ts not in line:
-                    continue
-                try:
-                    d = json.loads(line)
-                except Exception:
-                    continue
-                if d.get("ts") == ts:
-                    seen.add(d.get("video_id"))
-    except FileNotFoundError:
-        pass
-    except Exception as e:
-        print(f"⚠️ dedupe scan error: {e}")
+
+    def scan_seen():
+        seen = set()
+        try:
+            with open(JSONL_FILE, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                start = max(0, size - 262144)
+                f.seek(start)
+                chunk = f.read().decode("utf-8", "ignore").split("\n")
+                # ตัดบรรทัดแรกทิ้งเฉพาะตอน seek ข้ามมาจริง (อาจเป็นบรรทัดขาดครึ่ง)
+                if start > 0:
+                    chunk = chunk[1:]
+                for line in chunk:
+                    if not line.strip() or ts not in line:
+                        continue
+                    try:
+                        d = json.loads(line)
+                    except Exception:
+                        continue
+                    if d.get("ts") == ts:
+                        seen.add((d.get("video_id"), d.get("channel")))
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(f"⚠️ dedupe scan error: {e}")
+        return seen
 
     try:
-        with open(JSONL_FILE, "a") as f:
-            skipped = 0
-            for s in live_streams:
-                if s["video_id"] in seen:
-                    skipped += 1
-                    continue
-                f.write(json.dumps({
-                    "ts": ts,
-                    "video_id": s["video_id"],
-                    "title": s["title"][:100],
-                    "viewers": s["concurrent_viewers"],
-                    "channel": s["channel_name"],
-                    "url": s["url"],
-                    "actual_start": s.get("actual_start", ""),
-                }, ensure_ascii=False) + "\n")
-        if skipped:
-            print(f"⏭️ dedupe: ข้าม {skipped} แถวซ้ำที่ ts {ts}")
+        lock_path = JSONL_FILE + ".lock"
+        with open(lock_path, "a+") as lk:
+            fcntl.flock(lk, fcntl.LOCK_EX)
+            try:
+                seen = scan_seen()
+                with open(JSONL_FILE, "a") as f:
+                    skipped = 0
+                    for s in live_streams:
+                        if (s["video_id"], s.get("channel_name")) in seen:
+                            skipped += 1
+                            continue
+                        f.write(json.dumps({
+                            "ts": ts,
+                            "video_id": s["video_id"],
+                            "title": s["title"][:100],
+                            "viewers": s["concurrent_viewers"],
+                            "channel": s["channel_name"],
+                            "url": s["url"],
+                            "actual_start": s.get("actual_start", ""),
+                        }, ensure_ascii=False) + "\n")
+                if skipped:
+                    print(f"⏭️ dedupe: ข้าม {skipped} แถวซ้ำที่ ts {ts}")
+            finally:
+                fcntl.flock(lk, fcntl.LOCK_UN)
     except Exception as e:
         print(f"⚠️ JSONL write error: {e}")
 
