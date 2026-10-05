@@ -1,11 +1,11 @@
 # yt-live-monitor — host ใช้ (path = /docker/hermes-agent-r6gh/data/...)
 # รัน: docker compose -f docker-compose.hostinger.yml up -d --build
-# .env = /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
+# .env = /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/.env
 
 services:
   web:
     build:
-      context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
+      context: /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor
       dockerfile: Dockerfile
     container_name: yt-live-monitor-web
     restart: unless-stopped
@@ -24,12 +24,12 @@ services:
 
   collector:
     build:
-      context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
+      context: /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor
       dockerfile: Dockerfile.collector
     container_name: yt-live-monitor-collector
     restart: unless-stopped
     env_file:
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
+      - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/.env
     environment:
       - TZ=Asia/Bangkok
       - LIVE_JSONL=/data/live_data.jsonl
@@ -51,12 +51,12 @@ services:
   # ── Views collector: batch รายวัน (Analytics API) แยกจาก live monitor ──
   views-collector:
     build:
-      context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
+      context: /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor
       dockerfile: Dockerfile.views
     container_name: yt-views-collector
     restart: unless-stopped
     env_file:
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
+      - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/.env
     environment:
       - TZ=Asia/Bangkok
       - VIEWS_JSONL=/data/views_data.jsonl

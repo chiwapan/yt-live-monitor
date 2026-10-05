@@ -6,7 +6,7 @@
 services:
   web:
     build:
-      context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
+      context: /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor
       dockerfile: Dockerfile
     container_name: yt-live-monitor-web
     restart: unless-stopped
@@ -18,10 +18,10 @@ services:
       - VIEWS_JSONL=/data/views_data.jsonl
       - VIEWS_LIVE_JSONL=/data/views_live.jsonl
     volumes:
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/live_data.jsonl:/data/live_data.jsonl
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_data.jsonl:/data/views_data.jsonl
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_live.jsonl:/data/views_live.jsonl
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_month.jsonl:/data/views_month.jsonl
+      - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/live_data.jsonl:/data/live_data.jsonl
+      - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/views_data.jsonl:/data/views_data.jsonl
+      - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/views_live.jsonl:/data/views_live.jsonl
+      - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/views_month.jsonl:/data/views_month.jsonl
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8899/api/ping',timeout=4)"]
       interval: 60s
@@ -30,12 +30,12 @@ services:
 
   collector:
     build:
-      context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
+      context: /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor
       dockerfile: Dockerfile.collector
     container_name: yt-live-monitor-collector
     restart: unless-stopped
     env_file:
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
+      - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/.env
     environment:
       - TZ=Asia/Bangkok
       - LIVE_JSONL=/data/live_data.jsonl
@@ -43,8 +43,8 @@ services:
       - GAPI_SCRIPT=/app/google_api.py
       - YT_SHEET_ID=   # Sheets ไม่ใช้แล้ว — JSONL เป็น database หลัก
     volumes:
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/live_data.jsonl:/data/live_data.jsonl
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/yt-live-daily-state.json:/data/yt-live-daily-state.json
+      - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/live_data.jsonl:/data/live_data.jsonl
+      - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/yt-live-daily-state.json:/data/yt-live-daily-state.json
     healthcheck:
       test: ["CMD", "python", "-c", "import os,time; s=os.path.getmtime('/data/live_data.jsonl'); print('stale' if time.time()-s>420 else 'ok'); raise SystemExit(1 if time.time()-s>420 else 0)"]
       interval: 60s
@@ -57,12 +57,12 @@ services:
   #    ป้องกัน compose up คืนมาตัวเบิ้ล. ลบ comment กลับได้ถ้าต้องการคืน service นี้
   # views-collector:
   #   build:
-  #     context: /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
+  #     context: /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor
   #     dockerfile: Dockerfile.views
   #   container_name: yt-views-collector
   #   restart: unless-stopped
   #   env_file:
-  #     - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
+  #     - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/.env
   #   environment:
   #     - TZ=Asia/Bangkok
   #     - MODE=snapshot
@@ -73,8 +73,8 @@ services:
   #     - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
   #     - SNAPSHOT_TOP=15
   #   volumes:
-  #     - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_data.jsonl:/data/views_data.jsonl
-  #     - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/views_live.jsonl:/data/views_live.jsonl
+  #     - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/views_data.jsonl:/data/views_data.jsonl
+  #     - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/views_live.jsonl:/data/views_live.jsonl
   #     - /docker/hermes-agent-r6gh/data/google_token.json:/token/google_token.json
   #     - /docker/hermes-agent-r6gh/data/google_client_secret.json:/token/google_client_secret.json
   #   command: >
@@ -105,7 +105,7 @@ services:
     restart: unless-stopped
     network_mode: host
     env_file:
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
+      - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/.env
     command: tunnel run --token ${CF_TUNNEL_TOKEN}
     depends_on:
       - web
@@ -117,7 +117,7 @@ services:
     restart: unless-stopped
     network_mode: host
     env_file:
-      - /docker/hermes-agent-r6gh/data/projects/yt-live-monitor/.env
+      - /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor/.env
     command: tunnel run --token ${CF_TUNNEL_TOKEN_PHOTO}
     depends_on:
       - photo-dashboard
