@@ -6,11 +6,11 @@
 
 1. **ALWAYS rebuild container → แล้ว verify ผ่าน URL จริง** หลังแก้โค้ดทุกครั้งเท่านั้น:
    ```bash
-   cd /docker/hermes-agent-r6gh/data/projects/yt-live-monitor
+   cd /docker/hermes-agent-r6gh/data/projects/thairath/yt-live-monitor
    docker compose -f docker-compose.hostinger.yml build web
    docker compose -f docker-compose.hostinger.yml up -d web
    ```
-   แก้ไฟล์ใน `/opt/data/projects/yt-live-monitor/` อย่างเดียว **ไม่เห็นผล** จนกว่า user จะ rebuild container
+   แก้ไฟล์ใน `/opt/data/projects/thairath/yt-live-monitor/` อย่างเดียว **ไม่เห็นผล** จนกว่า user จะ rebuild container
 
 2. **verify ผ่าน public URL เท่านั้น** — `curl https://live.chiwapan.online/api/...`
    อย่า verify แค่ `localhost:8899` — ถ้าไม่ rebuild, public = โค้ดเก่า, localhost ≠ public
@@ -23,7 +23,7 @@
    - หน้า: **แนวโน้ม Peak / ตาราง** ใช้ `name` (ชื่อช่อง), **Concurrent รายวัน** ใช้ `live_title` (title จริง)
    - หัวเขียวรวมได้ 1 รายการ เพราะ `kw: ["ข่าวเช้าหัวเขียว", "ห้องข่าวหัวเขียว"]` (2 keywords 1 program)
 
-5. **อัปโหลด GitHub เสมอ** หลังแก้: `chiwapan/yt-live-monitor` branch `master` (source อยู่ `/opt/data/projects/yt-live-monitor/web/`)
+5. **อัปโหลด GitHub เสมอ** หลังแก้: `chiwapan/yt-live-monitor` branch `master` (source อยู่ `/opt/data/projects/thairath/yt-live-monitor/web/`)
 
 ## สถาปัตยกรรม
 - Live monitor: container `yt-live-monitor-web` (Flask `web/app.py`) port 8899 ผ่าน cloudflared named tunnel → `live.chiwapan.online`
