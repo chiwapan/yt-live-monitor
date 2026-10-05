@@ -15,3 +15,12 @@ backfill_queue.done
 web/views_mockup.html
 yt-live-daily-state.json
 yt-key-health.json
+
+# runtime/data artifacts (กันเข้า repo — 200MB+)
+backup_*/
+playboard_cache/
+live_data_recover.jsonl
+live_data.jsonl.lock
+views_month.jsonl
+snapshot_seen.json
+.recover_merged_ts

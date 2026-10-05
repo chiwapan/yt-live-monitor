@@ -3,8 +3,16 @@
 # เติมคลิปใหม่ (ที่มีใน views_live.jsonl แต่ยังไม่มีใน views_month.jsonl) เข้า views_month.jsonl
 # ดึง publishedAt + viewCount + likeCount + duration จริงจาก YouTube Data API v3 (videos.list)
 # แล้ว merge ลง views_month.jsonl (เขียนทับเฉพาะ video_id ที่เพิ่มเข้ามา — ไม่แตะของเก่า)
-import os, json, sys, time, urllib.request, urllib.error, urllib.parse
+import os, json, sys, time, socket, urllib.request, urllib.error, urllib.parse
 from datetime import datetime, timezone, timedelta
+
+# บังคับ IPv4 — sandbox DNS คืน IPv6 ก่อน แล้ว IPv6 route broken → urllib hang เกิน timeout
+# (curl ใช้ IPv4 ได้ 0.15s แต่ urllib ติด IPv6 ค้างชั่วโมง) กัน backfill วนตาย
+_orig_gai = socket.getaddrinfo
+def _ipv4_only(host, port, family=0, type=0, proto=0, flags=0):
+    return _orig_gai(host, port, socket.AF_INET, type, proto, flags)
+socket.getaddrinfo = _ipv4_only
+socket.setdefaulttimeout(30)
 
 ICT = timezone(timedelta(hours=7))
 HERE = os.path.dirname(os.path.abspath(__file__))

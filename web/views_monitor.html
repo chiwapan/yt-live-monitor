@@ -167,6 +167,17 @@ tr.click:hover{background:#f8fafc;}
           <tbody id="lbBody"></tbody>
         </table>
         <button class="loadmore" id="loadMore">โหลดอันดับเพิ่มเติม ▾</button>
+        <div class="pagesize-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 4px;gap:12px;">
+          <span id="lbCount" style="font-size:13px;color:var(--ink-2);">0/0 รายการ</span>
+          <label style="font-size:13px;color:var(--ink-2);">แสดงต่อหน้า:
+            <select id="pageSize" style="margin-left:6px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;">
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="all">ทั้งหมด</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       <div class="card">
@@ -291,6 +302,12 @@ let MONTH = {month:'', videos:[], total_videos:0, note:''};
 let TODAY_MAP = {};   // video_id → row จาก /api/views-today (วิดีโอ published วันนี้)
 let state = { filter:'all', angle:'split', monthAngle:'split', page:1, pageSize:10, dFrom:null, dTo:null, tab:'latest', channels:[] };
 
+// pageSize: 10 | 20 | 50 | 'all' (string)
+// ใช้ 0 แทน 'all' ใน state, render จะตรวจเอง
+function pageSizeLimit(){
+  return state.pageSize === 'all' ? Infinity : Number(state.pageSize);
+}
+
 function loadData(){
   // Optimization (2026-08-31): ?days=3 limits server response to 3 most-recent
   // dates instead of all 26 (~44MB → ~1-2MB). Frontend only needs latest + prev
@@ -373,7 +390,7 @@ function renderKPI(rows){
 
 function renderLeaderboard(rows){
   const all = sorted(filtered(rows));
-  const shown = all.slice(0, state.page*state.pageSize);
+  const shown = state.pageSize === 'all' ? all : all.slice(0, state.page * state.pageSize);
   const body = document.getElementById('lbBody');
   // มุมมอง "วันล่าสุด" ไม่มี delta → ซ่อนคอลัมน์
   const showDelta = state.tab !== 'latest';
@@ -595,7 +612,7 @@ function renderMonth(){
   renderMonthKPI(); renderMonthStrip(); renderMonthChart();
   let f = filteredMonth();
   const all = f.slice().sort((a,b)=>b.view_count-a.view_count);
-  const shown = all.slice(0, state.page*state.pageSize);
+  const shown = state.pageSize === 'all' ? all : all.slice(0, state.page * state.pageSize);
   const body = document.getElementById('monthBody');
   body.innerHTML='';
   shown.forEach((v)=>{
