@@ -24,3 +24,4 @@ live_data.jsonl.lock
 views_month.jsonl
 snapshot_seen.json
 .recover_merged_ts
+thaipbs_video_programs.jsonl

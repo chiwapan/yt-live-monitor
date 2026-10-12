@@ -104,6 +104,19 @@ ICT = timezone(timedelta(hours=7))
 STATE_FILE = os.environ.get("STATE_FILE",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "yt-live-daily-state.json"))
 
+# ─── Two-tier polling (เพิ่ม 2026-10-12) ───
+# HOT tier = สตรีมที่ last_viewers >= HOT_THRESHOLD → collector loop เรียก hot_tick() ทุก 1 นาที
+# COLD tier = ทุกอย่างที่เหลือ → main() เต็มรอบทุก 5 นาที (เหมือนเดิม)
+# เหตุผล: สตรีมคนดูพร้อมกัน ≥5,000 มี median 2 / p95 6 / max 7 ตัวต่อ tick (วัดจาก live_data จริง 90 วัน)
+#   → hot tick = 1 batch call (≤50 id) = 1 unit × 1,440 รอบ/วัน ≈ 1,440u
+#   →รวมทั้งระบบ ~4,500u/วัน ยังอยู่ใต้ 10,000u/วันของ key เดียว
+HOT_THRESHOLD = int(os.environ.get("HOT_CONCURRENT_MIN", "5000"))
+
+
+def floor_1min(dt):
+    """Hot-tier timestamp: ปัดเหลือ นาที (วินาที=0)"""
+    return dt.replace(second=0, microsecond=0)
+
 
 def floor_5min(dt):
     """Floor datetime: 09:00-09:35 ICT = ช่วง Live Talk ข่าวเช้า → 1 นาที (เส้นกราฟหนาขึ้น);
@@ -576,8 +589,14 @@ def save_state(state):
         json.dump(state, f, indent=2)
 
 
-def update_stream_state(state, live_streams, cron_now, api_ok=True, confirmed_ended=None):
+def update_stream_state(state, live_streams, cron_now, api_ok=True, confirmed_ended=None,
+                        scope=None):
     """Update peak viewers for each tracked stream.
+
+    scope (เพิ่ม 2026-10-12 สำหรับ two-tier): ถ้ากำหนดเป็น set ของ video_id ที่ "ตั้งใจ poll"
+      รอบนี้ → ให้นับ missed/มาร์ก ended เฉพาะตัวใน scope เท่านั้น
+      สำคัญ: hot_tick() poll แค่ตัว ≥5,000 — ถ้าไม่ครอบ scope, สตรีมเย็น (cold)
+      จะถูกนับ missed ทุกนาที → 6 นาทีถูกมาร์ก ended ผิดทั้งกระดาน
 
     การมาร์ก ended (แก้ถาวร 2026-08-07):
       บั๊กเดิม — poll พลาดเพราะ 429/quota → หายจาก current_ids → ครบ 10 นาที
@@ -629,6 +648,8 @@ def update_stream_state(state, live_streams, cron_now, api_ok=True, confirmed_en
     for vid in list(state["streams"].keys()):
         if vid in current_ids:
             continue
+        if scope is not None and vid not in scope:
+            continue  # ไม่ได้ตั้งใจ poll รอบนี้ (cold tier ใน hot tick) — ห้าม-count missed
         existing = state["streams"][vid]
         if existing.get("ended"):
             continue
@@ -884,6 +905,37 @@ def append_local_jsonl(live_streams, now):
 
 
 # ─── Main ───
+
+def hot_tick():
+    """Two-tier HOT pass — poll เฉพาะ stream ที่ last_viewers >= HOT_THRESHOLD ทุก 1 นาที.
+
+    ถูกมาก: candidates ~2-7 ตัว (p95) → 1 batch call = 1 unit
+    write live_data.jsonl ด้วย ts แบบ floor_1min (ต่างจาก cold ที่ floor_5min)
+    dedupe ใน append_local_jsonl กันชนรอบ 5 นาที (ts นาที != ts 5 นาที → ไม่ชน;
+    กรณี stream เดียวกันโผล่ทั้ง hot-min และ cold-5min ถูกรายงานคนละ ts = ตั้งใจ)
+    """
+    now = floor_1min(datetime.now(ICT))
+    state = load_state()
+    hot_ids = [vid for vid, s in state.get("streams", {}).items()
+               if not s.get("ended") and (s.get("last_viewers") or 0) >= HOT_THRESHOLD]
+    if not hot_ids:
+        return 0
+    ch_lookup = {c["id"]: c["name"] for c in CHANNELS}
+    vid_to_ch = {vid: s.get("channel", "") for vid, s in state["streams"].items()}
+    videos = [{"video_id": vid, "title": "", "channel_id": "",
+               "channel_name": vid_to_ch.get(vid, "Unknown")} for vid in hot_ids]
+    live_streams, confirmed_ended, api_ok = check_if_live(videos)
+    # check_if_live คืนเฉพาะ live — stream ที่หลุด threshold ยังต้องเขียน (เดี๋ยวรอบ cold จัดการ tier)
+    scope = set(hot_ids)
+    update_stream_state(state, live_streams, now, api_ok=api_ok,
+                        confirmed_ended=confirmed_ended, scope=scope)
+    save_state(state)
+    if live_streams:
+        append_local_jsonl(live_streams, now)
+        print(f"🔥 hot_tick: {len(live_streams)}/{len(hot_ids)} ยัง live ≥{HOT_THRESHOLD:,}"
+              f" → {now.strftime('%H:%M')} ICT")
+    return len(live_streams)
+
 
 def main():
     if not API_KEYS and not DEMO_MODE:
