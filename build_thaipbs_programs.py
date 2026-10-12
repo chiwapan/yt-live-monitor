@@ -110,6 +110,7 @@ def main():
     if not os.path.exists(DATA):
         raise SystemExit(f"not found: {DATA}")
     vids = {}
+    dedup_key = {}   # (video_id, ts) → viewer (แก้ 12/10/69: แถวซ้ำจาก double-writer ยุค 1-12 ต.ค. ~7%)
     with open(DATA, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -125,6 +126,16 @@ def main():
             v = d.get("viewers")
             if not vid or v is None:
                 continue
+            k = (vid, d.get("ts", ""))
+            if k in dedup_key:
+                if int(v) > dedup_key[k]:
+                    # ซ้ำคนละค่า → เก็บ max (2 writers poll คนละวินาที)
+                    for a in [vids[vid]]:
+                        idx = a["ts"].index(d.get("ts", ""))
+                        a["vals"][idx] = int(v)
+                    dedup_key[k] = int(v)
+                continue
+            dedup_key[k] = int(v)
             a = vids.setdefault(vid, {"titles": collections.Counter(), "vals": [], "ts": [],
                                       "ch": d.get("channel", ""), "url": d.get("url", "")})
             a["titles"][d.get("title", "")] += 1
