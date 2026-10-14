@@ -489,10 +489,9 @@ def _load_views_month():
     # คำนวณ latest month + video info เดียวกัน
     months = sorted({v.get("published_at", "")[:7] for v in vids if v.get("published_at")})
     latest_month = months[-1] if months else ""
-    # ยอดวิวล่าสุด: scan snapshot 1 pass
+    # ยอดวิวล่าสุด: scan snapshot 1 pass (stream — 10-14: ห้าม read ทั้งไฟล์ กิน 1.4GB)
     live_vc = {}
-    live_raw = _read_jsonl(VIEWS_LIVE_JSONL)
-    for r in live_raw:
+    for r in _iter_jsonl(VIEWS_LIVE_JSONL):
         vid = r.get("video_id")
         if vid:
             live_vc[vid] = r.get("viewers", 0)
@@ -515,7 +514,7 @@ def api_views_month():
 
     # ยอดวิวสดล่าสุดของแต่ละ video_id จาก snapshot
     live_vc = {}
-    for r in _read_jsonl(VIEWS_LIVE_JSONL):
+    for r in _iter_jsonl(VIEWS_LIVE_JSONL):
         vid = r.get("video_id")
         if not vid:
             continue
@@ -566,10 +565,9 @@ def api_views_today():
     # วันที่ "วันนี้" ตาม Asia/Bangkok (UTC+7) — ใช้เป็น label วันที่ snapshot
     from datetime import timezone as _tz, timedelta as _td
     today = datetime.now(_tz(_td(hours=7))).strftime("%Y-%m-%d")
-    live_raw = _read_jsonl(VIEWS_LIVE_JSONL)
-    # รวบรวม video ล่าสุด (max view_count จาก snapshot)
+    # รวบรวม video ล่าสุด (max view_count จาก snapshot) — stream 1 pass
     latest_vids = {}
-    for r in live_raw:
+    for r in _iter_jsonl(VIEWS_LIVE_JSONL):
         vid = r.get("video_id")
         if not vid:
             continue
@@ -645,8 +643,50 @@ def _read_jsonl(path):
     return out
 
 
+def _iter_jsonl(path):
+    """Stream JSONL ทีละแถว — RSS คงที่ ไม่โตตามขนาดไฟล์
+    (2026-10-14: _read_jsonl ทั้ง views_live.jsonl 700K+ แถว = ~1.4GB → VM OOM → gateway ตาย)
+    ใช้กับจุดที่แค่ aggregate ต่อแถว ไม่ต้องการ list ทั้งหมด"""
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    yield json.loads(line)
+                except Exception:
+                    continue
+    except OSError:
+        return
+
+
+def _last_live_ts():
+    """ts จากแถวสุดท้ายของ VIEWS_LIVE_JSONL — อ่านแค่ tail (ไฟล์ append-only)"""
+    try:
+        with open(VIEWS_LIVE_JSONL, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            if size == 0:
+                return ""
+            f.seek(max(0, size - 4096))
+            for line in reversed(f.read().decode("utf-8", "ignore").strip().splitlines()):
+                try:
+                    return json.loads(line).get("ts", "")
+                except Exception:
+                    continue
+            return ""
+    except OSError:
+        return ""
+
+
 def _load_views_batch():
-    """Load batch + last_live from jsonl files. Cached by mtime."""
+    """Load batch + last_live from jsonl files. Cached by mtime.
+    2026-10-14: stream views_live.jsonl ผ่าน _iter_jsonl แทน _read_jsonl —
+    of list 700K dicts ใน cache = RSS ~1.4GB โตตามไฟล์ → VM OOM ฆ่า gateway ซ้ำ ๆ
+    batch ที่ส่งออกจริงใช้แค่ ~10K แถว → aggregate per-(vid,date) ตอน scan แล้วทิ้ง raw row"""
     global _views_data_cache
     try:
         m1 = os.path.getmtime(VIEWS_JSONL) if os.path.exists(VIEWS_JSONL) else 0
@@ -659,13 +699,58 @@ def _load_views_batch():
     combined = (m1, m2)
     if _views_data_cache["mtime"] == combined and _views_data_cache["batch"] is not None:
         return _views_data_cache["batch"], _views_data_cache["last_live"]
-    live = _read_jsonl(VIEWS_LIVE_JSONL)
-    batch = _read_jsonl(VIEWS_JSONL)
-    if not batch and live:
-        batch = compute_daily_from_snapshot(live)
-    last_live = live[-1]["ts"] if live else ""
+    batch = _read_jsonl(VIEWS_JSONL)  # views_data.jsonl เล็ก (~0MB) — คงเดิม
+    if not batch:
+        batch = _daily_from_snapshot_stream()
+    last_live = _last_live_ts()
     _views_data_cache = {"mtime": combined, "batch": batch, "last_live": last_live}
     return batch, last_live
+
+
+def _daily_from_snapshot_stream():
+    """compute_daily_from_snapshot เวอร์ชัน streaming — เก็บเฉพาะ aggregate
+    vid -> date -> [first_ts, first_vc, last_ts, last_vc] (เล็ก: ~1K vids × ~14 days)
+    คืนค่าเดียวกับ compute_daily_from_snapshot(_read_jsonl(...)) แต่ RSS คงที่"""
+    from collections import defaultdict
+    by_vid_date = defaultdict(dict)  # vid -> date -> [first_ts, first_vc, last_ts, last_vc]
+    meta = {}  # vid -> (channel_id, channel, title, is_short)
+    for r in _iter_jsonl(VIEWS_LIVE_JSONL):
+        vid = r.get("video_id")
+        if not vid:
+            continue
+        d = r.get("ts", "")[:10]
+        ts = r.get("ts", "")
+        vc = int(r.get("view_count", 0))
+        e = by_vid_date[vid].get(d)
+        if e is None:
+            by_vid_date[vid][d] = [ts, vc, ts, vc]
+        else:
+            if ts < e[0]:
+                e[0], e[1] = ts, vc
+            if ts > e[2]:
+                e[2], e[3] = ts, vc
+        meta[vid] = (r.get("channel_id"), r.get("channel"), r.get("title"), r.get("is_short_est"))
+
+    all_dates = sorted({d for vid in by_vid_date for d in by_vid_date[vid]})
+    prev_date = {}
+    for i, d in enumerate(all_dates):
+        prev_date[d] = all_dates[i - 1] if i > 0 else None
+
+    rows = []
+    for vid, dmap in by_vid_date.items():
+        cid, cname, title, is_short = meta[vid]
+        for d in dmap:
+            last_vc = dmap[d][3]
+            first_vc = dmap[d][1]
+            pd = prev_date[d]
+            base = dmap[pd][3] if (pd and pd in dmap) else first_vc
+            rows.append({
+                "date": d, "channel_id": cid, "channel": cname,
+                "video_id": vid, "title": title or "",
+                "product": "SHORTS" if is_short else "CORE",
+                "views": max(0, last_vc - base),
+            })
+    return rows
 
 
 @app.route("/api/views-data")
