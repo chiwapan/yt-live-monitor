@@ -315,16 +315,15 @@ def api_live_data():
                         cached["available_dates"].add(dt.strftime("%Y-%m-%d"))
                     ch = d.get("channel", "Unknown")
                     vid = d.get("video_id", "")
-                    cached["raw_rows"].append({
-                        "ts": ts,
-                        "dt": dt,
-                        "ch": ch,
-                        "vid": vid,
-                        "viewers": d.get("viewers", 0),
-                        "title": d.get("title", ""),
-                        "url": d.get("url", ""),
-                        "actual_start": d.get("actual_start", ""),
-                    })
+                    # tuple (ts, dt, ch, vid, viewers, title, url, actual_start)
+                    # — dict ต่อแถว 177K แถว กิน ~300-500MB (OOM lesson 2026-10-14)
+                    cached["raw_rows"].append((
+                        ts, dt, ch, vid,
+                        d.get("viewers", 0),
+                        d.get("title", ""),
+                        d.get("url", ""),
+                        d.get("actual_start", ""),
+                    ))
                     if dt and (cached["last_dt"] is None or dt > cached["last_dt"]):
                         cached["last_dt"] = dt
         except FileNotFoundError:
@@ -350,18 +349,18 @@ def api_live_data():
     total = 0
     for r in cached["raw_rows"]:
         if recent_dates_set is not None:
-            day = r["ts"].split(" ")[0] if r["ts"] else ""
+            day = r[0].split(" ")[0] if r[0] else ""
             if day not in recent_dates_set:
                 continue
         total += 1
-        streams[r["ch"]][r["vid"]].append({
-            "ts": r["ts"], "dt": r["dt"], "viewers": r["viewers"]
+        streams[r[2]][r[3]].append({
+            "ts": r[0], "dt": r[1], "viewers": r[4]
         })
-        stream_meta[r["vid"]] = {
-            "title": r["title"],
-            "channel": r["ch"],
-            "url": r["url"],
-            "actual_start": r["actual_start"],
+        stream_meta[r[3]] = {
+            "title": r[5],
+            "channel": r[2],
+            "url": r[6],
+            "actual_start": r[7],
         }
 
     last_dt = cached["last_dt"]
